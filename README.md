@@ -77,6 +77,7 @@ PRISM の Double-Submit Cookie は独自に拡張した JWT である AES-GCM JW
 クライアントには以下の２種類のトークンが保存される。
   - SecretCookie ... HttpOnly: true
   - AccessCookie ... HttpOnly: false
+
 クライアントはサーバーの状態を変更しうるリクエストを投げる場合、
 AccessCookie を JavaScript から読み取り、リクエストヘッダーに SubmitHeader として付与する。
 CSRF ではヘッダーを書き換えることができないため、PRISM は SecretCookie と SubmitHeader の中にある
@@ -106,12 +107,14 @@ PRISM はクライアントから以下の３種類の経路でトークンを�
   - SecretCookie -> SecretToken
   - AccessCookie -> AccessToken
   - SubmitHeader -> SubmitToken
+
 PRISM の Double-Submit Cookie の方式においては、
 原理的に AccessToken と SubmitToken はまったく同じ文字列であることが期待される。
 また SecretToken と AccessToken は同じ Jti を持つため、SecretToken と SubmitToken の Jti を比較すると一致することが期待される。
 PRISM はそれぞれのトークンから以下の情報を取り出してリクエストヘッダに付与し、バックエンドに送信する。
   - SecretToken -> secretPayload
   - AccessToken -> accessPayload, publicPayload
+
 ただしユーザーが SubmitHeader をリクエストに付与しなかった場合、accessPayload だけはバックエンドに送信されない。
 また、オプションで SecretToken, AccessToken で共通の Jti をリクエストヘッダに付与することができ、
 バックエンドはこの Jti をセッション管理用の ID として扱ってもよい。
@@ -120,6 +123,7 @@ PRISM はそれぞれのトークンから以下の情報を取り出してリ�
   - secretPayload ... Cookie が存在する限り常にバックエンドに送信される情報で、クライアント側からは暗号化されていて読み取れない。
   - accessPayload ... Double-Submit Cookie が行われた場合にのみバックエンドに送信される情報で、クライアント側からは暗号化されていて読み取れない。
   - publicPayload ... Cookie が存在する限り常にバックエンドに送信される情報で、クライアント側から読み取れるが、改ざんはできない。
+
 たとえばユーザーIDは secretPayload、アプリに表示するユーザー名は publicPayload に保存しておくのがよいだろう。
 
 バックエンド側はレスポンスヘッダに secretPayload, accessPayload, publicPayload を付与することで、
@@ -134,6 +138,7 @@ PRISM は SecretCookie と AccessCookie に異なる MaxAge を指定し、一�
 目安としてはおおよそ以下である。
   - SecretCookie ... ７日ほど
   - AccessCookie ... 30日ほど
+
 この措置により、PRISM は AccessCookie を SecretCookie 更新用のトークンとみなすことができる。
 すなわち SecretCookie 有効期限が切れていても、AccessCookie が有効であれば、
 その情報をもとに SecretCookie と AccessCookie を自動更新することができる。
@@ -145,5 +150,3 @@ POST や PUT などのサーバーの状態を改変する重要な操作や、�
 CSRF を防ぐためにクライアントは SubmitHeader をリクエストに付加することが推奨される。
 バックエンド側は SubmitHeader を解凍した accessPayload がリクエストヘッダに付加されているかどうかを
 必要に応じて確認し、リクエストを許可するかどうかを判断すべきである。
-=======
-```
