@@ -1,4 +1,5 @@
-FROM golang:1.24-bookworm
+ARG BASE_IMAGE=golang:1.24-bookworm
+FROM ${BASE_IMAGE}
 
 ARG UB_GID
 ARG UB_UID

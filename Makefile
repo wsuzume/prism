@@ -3,19 +3,22 @@ SHELL := /usr/bin/env bash
 UB_UID := $(shell id -u)
 UB_GID := $(shell id -g)
 
+BASE_IMAGE := golang:1.24-bookworm
+
 .PHONY: image
 image:
 	cd dev && sudo docker image build \
+		--build-arg BASE_IMAGE=${BASE_IMAGE} \
 		--build-arg UB_UID=$(UB_UID) \
 		--build-arg UB_GID=$(UB_GID) \
-		-t go-dev:202507 .
+		-t go-prism-dev:202507 .
 
 .PHONY: shell
 shell:
 	sudo docker container run -it --rm \
 		-p 8080:8080 \
 		-v ./:/work \
-		go-dev:202507 bash
+		go-prism-dev:202507 bash
 
 .PHONY: dev
 dev:
