@@ -5,6 +5,12 @@ UB_GID := $(shell id -g)
 
 BASE_IMAGE := golang:1.24-bookworm
 
+OUTPUT_DIR := bin
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Development Environment
+# ──────────────────────────────────────────────────────────────────────────────
+
 .PHONY: image
 image:
 	cd dev && sudo docker image build \
@@ -16,16 +22,16 @@ image:
 .PHONY: shell
 shell:
 	sudo docker container run -it --rm \
-		-p 8080:8080 \
+		-p 80:80 \
+		-p 443:443 \
 		-v ./:/work \
 		go-prism-dev:202507 bash
 
-.PHONY: dev
-dev:
-	@echo "Current IP addresses:"
-	@hostname -I
-	sudo docker compose --env-file ./envs/develop.env up
+# ──────────────────────────────────────────────────────────────────────────────
+#  Helper Commands (which can also be used in Development Environment)
+# ──────────────────────────────────────────────────────────────────────────────
 
+# Format codes
 .PHONY: format
 format:
 	go -C api fmt ./...
@@ -33,6 +39,7 @@ format:
 	go -C proxy fmt ./...
 	go -C pkg fmt ./...
 
+# Test codes
 .PHONY: test
 test: export GOTRACEBACK=all
 test:
@@ -42,14 +49,36 @@ test:
 	  go -C $$m test -v -race -count=1 -failfast ./...; \
 	done
 
-BIN=bin
-.PHONY: api client proxy react all clean
-api:    ; go -C api    build -o ../$(BIN)/api
-client: ; go -C client build -o ../$(BIN)/client
-proxy:  ; go -C proxy  build -o ../$(BIN)/proxy
-react:  ; cd react && npm run build
+.PHONY: all
 all: api client proxy
-clean: ; rm -rf $(BIN)
+
+.PHONY: api client proxy
+api:    ; go -C api    build -o ../$(OUTPUT_DIR)/api
+client: ; go -C client build -o ../$(OUTPUT_DIR)/client
+proxy:  ; go -C proxy  build -o ../$(OUTPUT_DIR)/proxy
+
+.PHONY: clean
+clean:
+	rm -rf $(OUTPUT_DIR)
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Helper Commands
+# ──────────────────────────────────────────────────────────────────────────────
+
+.PHONY: install
+install:
+	mkdir -p ~/.local/bin
+	cp ./bin/proxy ~/.local/bin/prism
+
+.PHONY: react
+react:
+	cd react && npm run build
+
+.PHONY: dev
+dev:
+	@echo "Current IP addresses:"
+	@hostname -I
+	sudo docker compose --env-file ./envs/develop.env up
 
 .PHONY: build/proxy
 build/proxy:
@@ -69,18 +98,3 @@ build:
 	sudo docker image prune -f
 	cd react && npm run build
 	sudo docker compose --env-file ./envs/develop.env build
-
-.PHONY: run
-run:
-	cd deploy && make run
-
-.PHONY: push
-push:
-	mkdir -p deploy
-	cp ./docker-compose.yml deploy
-	cp -r ./envs deploy
-	sudo docker save fl-client:latest -o deploy/fl-client.tar
-	sudo docker save fl-proxy:latest -o deploy/fl-proxy.tar
-	sudo docker save fl-api:latest -o deploy/fl-api.tar
-	sudo chown -R `id -un`:`id -gn` deploy
-	scp -r deploy web:~/
