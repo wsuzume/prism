@@ -1,64 +1,71 @@
 # Prism
 Prism is a reverse proxy that enables stateless session management.
 
-## Table of Contents
-- [Project Overview](#project-overview)
-- [Features](#features)
-- [Architecture](#architecture)
-  - [Core Services](#core-services)
-  - [Supporting Packages](#supporting-packages)
-  - [Frontend Applications](#frontend-applications)
-- [Prerequisites](#prerequisites)
-- [Getting Started](#getting-started)
-- [Configuration](#configuration)
-- [Running the Services](#running-the-services)
-  - [API Service](#api-service)
-  - [Proxy Service](#proxy-service)
-  - [Client Service](#client-service)
-  - [React Frontend](#react-frontend)
-- [Development Workflow](#development-workflow)
-- [Testing](#testing)
-- [Deployment](#deployment)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
-- [License](#license)
+## Project Directory Overview
+```text
+prism
+├── api     ... Example backend API server
+├── client  ... Example backend Web server that hosts application in `react` directory
+├── dev     ... Development environment source codes
+├── envs    ... Environment files for docker compose
+├── pkg     ... Public package which can be used from other projects
+├── proxy   ... Reverse proxy that can be used as a product
+└── react   ... Example frontend application
+```
 
-## Project Overview
+## Example App
+Tested on:
+* Ubuntu 24.04.2 LTS
+* Docker version 28.3.1, build 38b7060
+* GNU Make 4.3
 
-## Features
+Example app consists from 3 components:
+* `prism-proxy`: reverse proxy
+* `prism-client`: frontend Web server
+* `prism-api`: backend api server
 
-## Architecture
+`/api` および `/api/*` へのアクセスは `prism-api` へとルーティングされ、それ以外は `prism-client` にルーティングされる。
 
-### Core Services
+### Build Example
+```
+make build
+```
 
-### Supporting Packages
+### Run Example
+```
+make dev
+```
 
-### Frontend Applications
+## Development Environment
+Tested on:
+* Ubuntu 24.04.2 LTS
+* Docker version 28.3.1, build 38b7060
+* GNU Make 4.3
 
-## Prerequisites
+### Building a Development Environment
+```
+make image
+```
 
-## Getting Started
+上記コマンドは `go-prism-dev:202507` という開発環境を作成し、これは `Prism` のビルドに十分な構成である。
+このイメージのデフォルトユーザーは、ビルドしたユーザーの UID, GID を持ったユーザーになる。
 
-## Configuration
+### Entering into a Development Environment
+```
+make shell
+```
 
-## Running the Services
+上記コマンドは `make image` で作成した開発環境にエンターする。
+カレントディレクトリを `/work` にバインドマウントするため、引き続き `Makefile` 内のコマンドを使用できる。
 
-### API Service
+### Using Development Commands
+```
+# Build product reverse proxy
+make proxy
 
-### Proxy Service
+# Format codes
+make format
 
-### Client Service
-
-### React Frontend
-
-## Development Workflow
-
-## Testing
-
-## Deployment
-
-## Troubleshooting
-
-## Contributing
-
-## License
+# Test codes
+make test
+```
