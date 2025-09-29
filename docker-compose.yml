@@ -1,0 +1,62 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: ./api/Dockerfile
+      args:
+        TARGET: api
+    image: prism-api:local
+    container_name: prism-api
+    environment:
+      - APP_MODE=${APP_MODE} 
+    networks:
+      appnet:
+        ipv4_address: 10.8.148.11
+    command: ["./api"] 
+
+  client:
+    build:
+      context: .
+      dockerfile: ./client/Dockerfile
+      args:
+        TARGET: client
+    image: prism-client:local
+    container_name: prism-client
+    environment:
+      - APP_MODE=${APP_MODE} 
+    networks:
+      appnet:
+        ipv4_address: 10.8.148.10
+    command: ["./client"] 
+
+  proxy:
+    build:
+      context: .
+      dockerfile: ./proxy/Dockerfile
+      args:
+        TARGET: proxy
+    image: prism-proxy:local
+    container_name: prism-proxy
+    depends_on:
+      - api
+      - client
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config.yml:/opt/prism/config.yml
+      - ./certs:/var/lib/prism/certs
+    environment:
+      - APP_MODE=${APP_MODE} 
+    networks:
+      appnet:
+        aliases:
+          - proxy
+    command: ["./proxy"] 
+
+networks:
+  appnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.8.148.0/24
