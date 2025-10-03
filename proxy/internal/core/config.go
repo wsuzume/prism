@@ -15,6 +15,7 @@ type Config struct {
 	} `yaml:"tls"`
 
 	AllowedOrigins []string                 `yaml:"allowed_origins"`
+	IdentityCenterAddresses []string          `yaml:"identity_center_addresses"`
 	Backends       map[string]BackendConfig `yaml:"backends"`
 }
 

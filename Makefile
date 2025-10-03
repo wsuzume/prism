@@ -1,3 +1,11 @@
+MODE ?= DEBUG
+
+ifeq ($(MODE),DEBUG)
+  BUILD_TAG := debug
+else
+  BUILD_TAG := release
+endif
+
 SHELL := /usr/bin/env bash
 
 UB_UID := $(shell id -u)
@@ -55,7 +63,7 @@ all: api client proxy
 .PHONY: api client proxy
 api:    ; go -C api    build -o ../$(OUTPUT_DIR)/api
 client: ; go -C client build -o ../$(OUTPUT_DIR)/client
-proxy:  ; go -C proxy  build -o ../$(OUTPUT_DIR)/proxy
+proxy:  ; go -C proxy  build -tags ${BUILD_TAG} -o ../$(OUTPUT_DIR)/proxy
 
 .PHONY: clean
 clean:
@@ -97,4 +105,4 @@ build:
 	sudo docker compose --env-file ./envs/develop.env down
 	sudo docker image prune -f
 	cd react && npm run build
-	sudo docker compose --env-file ./envs/develop.env build
+	sudo docker compose --env-file ./envs/develop.env build --build-arg BUILD_TAG=${BUILD_TAG}

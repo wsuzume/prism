@@ -31,6 +31,13 @@ Example app consists from 3 components:
 make build
 ```
 
+デバッギングコードを抑制したリリースモードでビルドしたい場合は以下。
+
+```
+MODE=release make build
+```
+
+
 ### Run Example
 ```
 make dev

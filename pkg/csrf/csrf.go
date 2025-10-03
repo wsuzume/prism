@@ -247,7 +247,7 @@ type DoubleSubmitCookieCSRFProtector struct {
 	DetectTokenSpoofing bool
 
 	// 中央集権的なID管理機能がある場合
-	IdentityCenterAddress []string
+	IdentityCenterAddressPool []string
 }
 
 type decryptedToken struct {
@@ -718,7 +718,7 @@ func (p *DoubleSubmitCookieCSRFProtector) inIdentityCenterList(resp *http.Respon
 	if host == "" {
 		return false
 	}
-	for _, allowed := range p.IdentityCenterAddress {
+	for _, allowed := range p.IdentityCenterAddressPool {
 		// 文字列一致（IP想定）。必要に応じて net.ParseIP で厳密化可。
 		if allowed == host {
 			return true
@@ -773,7 +773,7 @@ func (p *DoubleSubmitCookieCSRFProtector) ModifyResponse(orig func(*http.Respons
 			return nil
 		}
 
-		if p.IdentityCenterAddress != nil && !p.inIdentityCenterList(resp) {
+		if p.IdentityCenterAddressPool != nil && !p.inIdentityCenterList(resp) {
 			return nil
 		}
 
