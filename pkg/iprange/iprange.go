@@ -60,6 +60,20 @@ func (r *v6Range) Contains(ip net.IP) bool {
 	return bytes.Compare(v6, r.start) >= 0 && bytes.Compare(v6, r.end) <= 0
 }
 
+type Pool []Range
+
+func (p *Pool) Contains(ip net.IP) bool {
+	if p == nil || ip == nil {
+		return false
+	}
+	for _, r := range *p {
+		if r != nil && r.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
+
 //
 // ──────────────────────────────────────────────────────────────────────────────
 //  helper / utilities
