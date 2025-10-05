@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"prism/pkg/cipher"
+	"prism/pkg/iprange"
 	"prism/pkg/jwt"
 	"prism/proxy/msg"
 )
@@ -247,7 +249,7 @@ type DoubleSubmitCookieCSRFProtector struct {
 	DetectTokenSpoofing bool
 
 	// 中央集権的なID管理機能がある場合
-	IdentityCenterAddressPool []string
+	IdentityCenterAddressPool iprange.Pool
 }
 
 type decryptedToken struct {
@@ -718,13 +720,8 @@ func (p *DoubleSubmitCookieCSRFProtector) inIdentityCenterList(resp *http.Respon
 	if host == "" {
 		return false
 	}
-	for _, allowed := range p.IdentityCenterAddressPool {
-		// 文字列一致（IP想定）。必要に応じて net.ParseIP で厳密化可。
-		if allowed == host {
-			return true
-		}
-	}
-	return false
+	ip := net.ParseIP(host)
+	return p.IdentityCenterAddressPool.Contains(ip)
 }
 
 // DoubleSubmitCookieModifyResponse は、既存の ModifyResponse をラップし、以下の機能を付与する

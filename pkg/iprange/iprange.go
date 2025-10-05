@@ -222,3 +222,15 @@ func ParseRange(s string) (Range, error) {
 
 	return r, nil
 }
+
+func ParseRanges(ss []string) (Pool, error) {
+	pool := make(Pool, 0, len(ss))
+	for i, s := range ss {
+		r, err := ParseRange(strings.TrimSpace(s))
+		if err != nil {
+			return nil, fmt.Errorf("ParseRanges: item %d (%q): %w", i, s, err)
+		}
+		pool = append(pool, r)
+	}
+	return pool, nil
+}

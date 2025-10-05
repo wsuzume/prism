@@ -249,7 +249,7 @@ func (d *Database) LoginUser(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
 		return
 	}
-	
+
 	c.Header("PRISM-SECRET", "secret-token")
 	c.Header("PRISM-ACCESS", "access-token")
 	c.Header("PRISM-PUBLIC", "public-token")
