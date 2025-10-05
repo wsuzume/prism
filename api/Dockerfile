@@ -1,6 +1,7 @@
 FROM golang:1.24-bookworm AS builder
 
 ARG TARGET
+ARG TARGET_GOARCH=amd64
 
 WORKDIR /src
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -20,10 +21,16 @@ COPY ${TARGET}/ ./${TARGET}/
 COPY pkg/ ./pkg/
 
 ENV GOFLAGS="-mod=readonly"
+# RUN --mount=type=cache,target=/root/.cache/go-build \
+#     --mount=type=cache,target=/go/pkg/mod \
+#     CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
+#     go -C ./${TARGET} build -trimpath -ldflags="-s -w" -o /out/${TARGET} .
+
+# Mac でまずはこれを使って動作確認
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
-    go -C ./${TARGET} build -trimpath -ldflags="-s -w" -o /out/${TARGET} .
+    CGO_ENABLED=1 GOOS=linux GOARCH=${TARGET_GOARCH} \
+    go -C ./${TARGET} build -trimpath -ldflags="-s -w" -tags "${BUILD_TAG}" -o /out/${TARGET} .
 
 # ランタイム用ディレクトリ作成（nonroot が書けるように）
 RUN install -d -m 770 /var/lib/prism/data /var/lib/prism/certs && \

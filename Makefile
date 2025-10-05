@@ -1,5 +1,17 @@
 MODE ?= DEBUG
 
+HOST_ARCH := $(shell uname -m)
+
+ifeq ($(HOST_ARCH),x86_64)
+  TARGET_GOARCH := amd64
+else ifeq ($(HOST_ARCH),arm64)
+  TARGET_GOARCH := arm64
+else ifeq ($(HOST_ARCH),aarch64)
+  TARGET_GOARCH := arm64
+else
+  TARGET_GOARCH := amd64
+endif
+
 ifeq ($(MODE),DEBUG)
   BUILD_TAG := debug
 else
@@ -85,7 +97,7 @@ react:
 .PHONY: dev
 dev:
 	@echo "Current IP addresses:"
-	@hostname -I
+	#@hostname -I
 	sudo docker compose --env-file ./envs/develop.env up
 
 .PHONY: build/proxy
@@ -105,4 +117,6 @@ build:
 	sudo docker compose --env-file ./envs/develop.env down
 	sudo docker image prune -f
 	cd react && npm run build
-	sudo docker compose --env-file ./envs/develop.env build --build-arg BUILD_TAG=${BUILD_TAG}
+	sudo docker compose --env-file ./envs/develop.env build \
+		--build-arg BUILD_TAG=${BUILD_TAG} \
+		--build-arg TARGET_GOARCH=${TARGET_GOARCH}
