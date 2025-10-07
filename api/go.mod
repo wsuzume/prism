@@ -1,4 +1,4 @@
-module prism/api
+module github.com/wsuzume/prism/api
 
 go 1.24
 
