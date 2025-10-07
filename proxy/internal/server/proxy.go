@@ -15,6 +15,8 @@ import (
 
 	"prism/pkg/cipher"
 	"prism/pkg/csrf"
+	"prism/pkg/iprange"
+	"prism/pkg/mode"
 	"prism/pkg/session"
 	"prism/proxy/internal/core"
 )
@@ -42,11 +44,19 @@ func nowTS() string {
 // ─────────────────────────────────────────────────────────────────────────────-
 
 func RunReverseProxy(cmd *cobra.Command, args []string) {
+	if mode.Debug {
+		log.Println("[PRISM DEBUG MODE]")
+	} else {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	// 設定読込
 	cfg, err := core.LoadConfig()
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}
+
+	if mode.Debug { log.Println(cfg.String()) }
 
 	// 秘密鍵のロード（パスをログに含める）
 	const secretDir = "/var/lib/prism/secrets"
@@ -77,7 +87,10 @@ func RunReverseProxy(cmd *cobra.Command, args []string) {
 
 	// Double-Submit Cookie（暗号化付き）
 	dscp := csrf.DefaultDoubleSubmitCookieCSRFProtector(encrypter)
-	dscp.IdentityCenterAddress = []string{"10.8.148.11"}
+	dscp.IdentityCenterAddressPool, err = iprange.ParseRanges(cfg.IdentityCenterAddresses)
+	if err != nil {
+		log.Fatalf("failed to parse identity_center_addresses: %v", err)
+	}
 
 	// ── Gin router ────────────────────────────────────────────────────────────
 	r := gin.New()

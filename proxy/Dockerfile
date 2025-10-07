@@ -1,6 +1,7 @@
 FROM golang:1.24-bookworm AS builder
 
 ARG TARGET
+ARG BUILD_TAG
 
 WORKDIR /src
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git && rm -rf /var/lib/apt/lists/*
@@ -24,7 +25,7 @@ ENV GOFLAGS="-mod=readonly"
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go -C ./${TARGET} build -trimpath -ldflags="-s -w" -o /out/${TARGET} .
+    go -C ./${TARGET} build -tags ${BUILD_TAG} -trimpath -ldflags="-s -w" -o /out/${TARGET} .
 
 # ★ 最終段で使う空ディレクトリをここで作成＆権限設定
 RUN install -d -m 700 /var/lib/prism/certs && \

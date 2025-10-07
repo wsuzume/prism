@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"prism/pkg/cipher"
+	"prism/pkg/iprange"
 	"prism/pkg/jwt"
 	"prism/proxy/msg"
 )
@@ -103,17 +105,17 @@ func (p *BasicCSRFProtector) Middleware() gin.HandlerFunc {
 // ──────────────────────────────────────────────────────────────────────────────
 //
 
-// PRISM の Double-Submit Cookie は独自に拡張した JWT である AES-GCM JWT を用いる。
+// Prism の Double-Submit Cookie は独自に拡張した JWT である AES-GCM JWT を用いる。
 // 将来的な拡張を見込んで暗号化アルゴリズムは AAD が使えるアルゴリズムであればなんでも使えるようになっている。
 // クライアントには以下の２種類のトークンが保存される。
 //   - SecretCookie ... HttpOnly: true
 //   - AccessCookie ... HttpOnly: false
 // クライアントはサーバーの状態を変更しうるリクエストを投げる場合、
 // AccessCookie を JavaScript から読み取り、リクエストヘッダーに SubmitHeader として付与する。
-// CSRF ではヘッダーを書き換えることができないため、PRISM は SecretCookie と SubmitHeader の中にある
+// CSRF ではヘッダーを書き換えることができないため、Prism は SecretCookie と SubmitHeader の中にある
 // トークンIDを比較することで正規の処理であることを検証できる。
 // XSS は防ぐことができないが、これは他の CSRF 対策と変わらない。
-// PRISM の SecretCookie, AccessCookie に用いられる AES-GCM JWT のフォーマットは以下である。
+// Prism の SecretCookie, AccessCookie に用いられる AES-GCM JWT のフォーマットは以下である。
 //
 // --- SecretCookie ---
 //   base64url(AES-GCM([ base64url(json(JwtHeader)) ] . [ base64url(json(JwtClaims{base64url(secretPayload)})) ]))
@@ -124,21 +126,21 @@ func (p *BasicCSRFProtector) Middleware() gin.HandlerFunc {
 // 仕様の詳細は以下である。
 //   - AES-GCM JWT の JwtHeader, JwtClaims は JSON -> base64url でエンコードされ、"." で結合されたのち全体が AES-GCM で暗号化され、base64url で再エンコードされる。
 //   - AES-GCM JWT は全体が AES-GCM で暗号化される際、AAD を付加してよい。付加した AAD は AES-GCM -> base64url で暗号化された文字列に、"." で結合して付加する。
-//   - secretPayload, accessPayload, publicPayload は PRISM によって base64url でエンコードされる。
+//   - secretPayload, accessPayload, publicPayload は Prism によって base64url でエンコードされる。
 //   - SecretCookie の JwtClaims は Usr という拡張フィールドを持ち、secretPayload を保存できる。
 //   - AccessCookie の JwtClaims は Usr という拡張フィールドを持ち、accessPayload を保存できる。
 //   - AccessCookie は publicPayload を AAD として付加できる。すなわち publicPayload は改ざんを検知できる。
 //   - SecretCookie と AccessCookie の JwtClaims.Jti は常に同じ値を持つ。
 //
-// PRISM はクライアントから以下の３種類の経路でトークンを受け取ることができる。
+// Prism はクライアントから以下の３種類の経路でトークンを受け取ることができる。
 // それぞれの経路と取得されたトークンの呼称の対応は以下である。
 //   - SecretCookie -> SecretToken
 //   - AccessCookie -> AccessToken
 //   - SubmitHeader -> SubmitToken
-// PRISM の Double-Submit Cookie の方式においては、
+// Prism の Double-Submit Cookie の方式においては、
 // 原理的に AccessToken と SubmitToken はまったく同じ文字列であることが期待される。
 // また SecretToken と AccessToken は同じ Jti を持つため、SecretToken と SubmitToken の Jti を比較すると一致することが期待される。
-// PRISM はそれぞれのトークンから以下の情報を取り出してリクエストヘッダに付与し、バックエンドに送信する。
+// Prism はそれぞれのトークンから以下の情報を取り出してリクエストヘッダに付与し、バックエンドに送信する。
 //   - SecretToken -> secretPayload
 //   - AccessToken -> accessPayload, publicPayload
 // ただしユーザーが SubmitHeader をリクエストに付与しなかった場合、accessPayload だけはバックエンドに送信されない。
@@ -152,19 +154,19 @@ func (p *BasicCSRFProtector) Middleware() gin.HandlerFunc {
 // たとえばユーザーIDは secretPayload、アプリに表示するユーザー名は publicPayload に保存しておくのがよいだろう。
 //
 // バックエンド側はレスポンスヘッダに secretPayload, accessPayload, publicPayload を付与することで、
-// PRISM は自動的にそれらを読み取り、既に Cookie に保存されているペイロードと比較して変更がある場合に Cookie を更新する。
+// Prism は自動的にそれらを読み取り、既に Cookie に保存されているペイロードと比較して変更がある場合に Cookie を更新する。
 // バックエンド側にサーバーが複数存在する場合、複数のサーバーがペイロードを更新しようとすると競合することがある。
 // すなわちサーバー１のレスポンスによって更新されたペイロードがサーバー２によって更新されることがあり、
 // その次にサーバー１に対して送られたリクエストに付与された Cookie が、サーバー１がかつて想定したものとはならない可能性がある。
-// これを防ぐために、PRISM は IdentityCenter として登録されたバックエンド以外からのペイロードを無視することができる。
+// これを防ぐために、Prism は IdentityCenter として登録されたバックエンド以外からのペイロードを無視することができる。
 // バックエンド側はブラウザに設定されている Cookie 更新のレートリミット及び Cookie の 4KB 制限にも留意すべきである。
 //
-// PRISM は SecretCookie と AccessCookie に異なる MaxAge を指定し、一般に AccessCookie の有効期間のほうが長い状態を想定する。
+// Prism は SecretCookie と AccessCookie に異なる MaxAge を指定し、一般に AccessCookie の有効期間のほうが長い状態を想定する。
 // 目安としてはおおよそ以下である。
 //   - SecretCookie ... ７日ほど
 //   - AccessCookie ... 30日ほど
-// この措置により、PRISM は AccessCookie を SecretCookie 更新用のトークンとみなすことができる。
-// すなわち SecretCookie 有効期限が切れていても、AccessCookie が有効であれば、
+// この措置により、Prism は AccessCookie を SecretCookie 更新用のトークンとみなすことができる。
+// すなわち SecretCookie の有効期限が切れていても、AccessCookie が有効であれば、
 // その情報をもとに SecretCookie と AccessCookie を自動更新することができる。
 // オプションで、自動更新されたかどうかを PRISM-PROXY-STATUS のような名前をキーとしてリクエストヘッダーに付与することができる。
 //
@@ -247,7 +249,7 @@ type DoubleSubmitCookieCSRFProtector struct {
 	DetectTokenSpoofing bool
 
 	// 中央集権的なID管理機能がある場合
-	IdentityCenterAddress []string
+	IdentityCenterAddressPool iprange.Pool
 }
 
 type decryptedToken struct {
@@ -718,13 +720,8 @@ func (p *DoubleSubmitCookieCSRFProtector) inIdentityCenterList(resp *http.Respon
 	if host == "" {
 		return false
 	}
-	for _, allowed := range p.IdentityCenterAddress {
-		// 文字列一致（IP想定）。必要に応じて net.ParseIP で厳密化可。
-		if allowed == host {
-			return true
-		}
-	}
-	return false
+	ip := net.ParseIP(host)
+	return p.IdentityCenterAddressPool.Contains(ip)
 }
 
 // DoubleSubmitCookieModifyResponse は、既存の ModifyResponse をラップし、以下の機能を付与する
@@ -773,7 +770,7 @@ func (p *DoubleSubmitCookieCSRFProtector) ModifyResponse(orig func(*http.Respons
 			return nil
 		}
 
-		if p.IdentityCenterAddress != nil && !p.inIdentityCenterList(resp) {
+		if p.IdentityCenterAddressPool != nil && !p.inIdentityCenterList(resp) {
 			return nil
 		}
 

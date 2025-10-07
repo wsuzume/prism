@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -14,8 +15,9 @@ type Config struct {
 		CacheDir string   `yaml:"cache_dir"`
 	} `yaml:"tls"`
 
-	AllowedOrigins []string                 `yaml:"allowed_origins"`
-	Backends       map[string]BackendConfig `yaml:"backends"`
+	AllowedOrigins          []string                 `yaml:"allowed_origins"`
+	IdentityCenterAddresses []string                 `yaml:"identity_center_addresses"`
+	Backends                map[string]BackendConfig `yaml:"backends"`
 }
 
 type BackendConfig struct {
@@ -38,4 +40,13 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 	return &cfg, nil
+}
+
+func (c *Config) String() string {
+	b, err := yaml.Marshal(c)
+	if err != nil {
+		// Marshal に失敗することはほぼないが、念のためエラー内容を含める
+		return fmt.Sprintf("Config<error: %v>", err)
+	}
+	return string(b)
 }
