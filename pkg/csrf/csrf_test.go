@@ -12,8 +12,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"prism/pkg/cipher"
-	"prism/pkg/jwt"
+	"github.com/wsuzume/prism/pkg/cipher"
+	"github.com/wsuzume/prism/pkg/jwt"
 )
 
 func init() {

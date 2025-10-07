@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/mattn/go-sqlite3"
 
-	"prism/api/route"
+	"github.com/wsuzume/prism/api/route"
 )
 
 func getenv(k, def string) string {

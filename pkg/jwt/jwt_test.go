@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"prism/pkg/cipher"
+	"github.com/wsuzume/prism/pkg/cipher"
 )
 
 // ヘルパー

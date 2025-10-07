@@ -1,6 +1,6 @@
 package main
 
-import "prism/proxy/cmd"
+import "github.com/wsuzume/prism/proxy/cmd"
 
 func main() {
 	cmd.Execute()
