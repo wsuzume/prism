@@ -1,4 +1,4 @@
-module prism/proxy
+module github.com/wsuzume/prism/proxy
 
 go 1.24.5
 

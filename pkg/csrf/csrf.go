@@ -15,10 +15,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"prism/pkg/cipher"
-	"prism/pkg/iprange"
-	"prism/pkg/jwt"
-	"prism/proxy/msg"
+	"github.com/wsuzume/prism/pkg/cipher"
+	"github.com/wsuzume/prism/pkg/iprange"
+	"github.com/wsuzume/prism/pkg/jwt"
+	"github.com/wsuzume/prism/proxy/msg"
 )
 
 //

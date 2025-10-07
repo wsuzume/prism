@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
-	"prism/proxy/internal/server" // loadConfig があるパッケージ
+	"github.com/wsuzume/prism/proxy/internal/server" // loadConfig があるパッケージ
 )
 
 var serveCmd = &cobra.Command{

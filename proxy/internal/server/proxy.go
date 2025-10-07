@@ -13,12 +13,12 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/acme/autocert"
 
-	"prism/pkg/cipher"
-	"prism/pkg/csrf"
-	"prism/pkg/iprange"
-	"prism/pkg/mode"
-	"prism/pkg/session"
-	"prism/proxy/internal/core"
+	"github.com/wsuzume/prism/pkg/cipher"
+	"github.com/wsuzume/prism/pkg/csrf"
+	"github.com/wsuzume/prism/pkg/iprange"
+	"github.com/wsuzume/prism/pkg/mode"
+	"github.com/wsuzume/prism/pkg/session"
+	"github.com/wsuzume/prism/proxy/internal/core"
 )
 
 // ──────────────────────────────────────────────────────────────────────────────

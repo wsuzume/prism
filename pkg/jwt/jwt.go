@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"prism/pkg/cipher"
+	"github.com/wsuzume/prism/pkg/cipher"
 )
 
 const (

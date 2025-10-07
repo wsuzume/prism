@@ -10,8 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"prism/pkg/cipher"
-	"prism/pkg/jwt"
+	"github.com/wsuzume/prism/pkg/cipher"
+	"github.com/wsuzume/prism/pkg/jwt"
 )
 
 const (
