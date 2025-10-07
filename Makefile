@@ -27,6 +27,13 @@ shell:
 		-v ./:/work \
 		go-prism-dev:202507 bash
 
+.PHONY: nshell
+nshell:
+	sudo docker container run -it --rm \
+		--network prism-appnet \
+		-v ./:/work \
+		go-prism-dev:202507 bash
+
 # ──────────────────────────────────────────────────────────────────────────────
 #  Helper Commands (which can also be used in Development Environment)
 # ──────────────────────────────────────────────────────────────────────────────
