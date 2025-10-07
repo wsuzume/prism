@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"prism/proxy/internal/core"
+	"github.com/wsuzume/prism/proxy/internal/core"
 )
 
 var configCmd = &cobra.Command{

@@ -1,4 +1,4 @@
-module client
+module github.com/wsuzume/prism/client
 
 go 1.24
 
