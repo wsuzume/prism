@@ -1,5 +1,6 @@
 // src/pages/Note.tsx
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 
 type Note = {
@@ -113,6 +114,9 @@ const NotePage: React.FC = () => {
           <button className="btn" onClick={onReload} disabled={loading} title="Reload">
             Reload
           </button>
+          <Link to="/note/new" className="btn">
+            ＋ New Note
+          </Link>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span>Limit</span>
             <select value={limit} onChange={onChangeLimit} disabled={loading}>
