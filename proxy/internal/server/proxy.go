@@ -17,6 +17,7 @@ import (
 	"github.com/wsuzume/prism/pkg/csrf"
 	"github.com/wsuzume/prism/pkg/iprange"
 	"github.com/wsuzume/prism/pkg/mode"
+	"github.com/wsuzume/prism/pkg/secret"
 	"github.com/wsuzume/prism/pkg/session"
 	"github.com/wsuzume/prism/proxy/internal/core"
 )
@@ -61,7 +62,7 @@ func RunReverseProxy(cmd *cobra.Command, args []string) {
 	// 秘密鍵のロード（パスをログに含める）
 	const secretDir = "/var/lib/prism/secrets"
 	const hmacFile = "session-hmac-secret"
-	hmacSecret, err := core.LoadOrCreateSecret(secretDir, hmacFile, 32)
+	hmacSecret, err := secret.LoadOrCreateSecret(secretDir, hmacFile, 32)
 	if err != nil {
 		log.Fatalf("failed to load HMAC secret: dir=%s file=%s: %v", secretDir, hmacFile, err)
 	}
@@ -70,7 +71,7 @@ func RunReverseProxy(cmd *cobra.Command, args []string) {
 	sm := session.DefaultSessionManager(signer)
 
 	const aeadFile = "double-submit-aead-secret"
-	aeadSecret, err := core.LoadOrCreateAEADKey(secretDir, aeadFile, 32)
+	aeadSecret, err := secret.LoadOrCreateAEADKey(secretDir, aeadFile, 32)
 	if err != nil {
 		log.Fatalf("failed to load AEAD secret: dir=%s file=%s: %v", secretDir, aeadFile, err)
 	}
