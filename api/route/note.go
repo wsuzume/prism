@@ -17,6 +17,7 @@ type Note struct {
 	ID            string `json:"id"`
 	UserID        string `json:"user_id"`
 	CanonicalName string `json:"canonical_name"`
+	Content       string `json:"content"`
 	CreatedAt     string `json:"created_at"`
 	DeletedAt     string `json:"deleted_at"`
 }
@@ -33,9 +34,16 @@ func (d *Database) PostNote(c *gin.Context) {
 	var req struct {
 		UserID        string `json:"user_id" binding:"required"`
 		CanonicalName string `json:"canonical_name" binding:"required"`
+		Content       string `json:"content" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	content := strings.TrimSpace(req.Content)
+	if content == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "content is required"})
 		return
 	}
 
@@ -49,9 +57,9 @@ func (d *Database) PostNote(c *gin.Context) {
 
 	ctx := c.Request.Context()
 	_, err = d.DB.ExecContext(ctx,
-		`INSERT INTO notes (id, user_id, canonical_name, created_at, deleted_at)
-                 VALUES (?, ?, ?, ?, NULL)`,
-		id, req.UserID, req.CanonicalName, now,
+		`INSERT INTO notes (id, user_id, canonical_name, content, created_at, deleted_at)
+                 VALUES (?, ?, ?, ?, ?, NULL)`,
+		id, req.UserID, req.CanonicalName, content, now,
 	)
 	if isSQLiteUniqueErr(err) {
 		c.JSON(http.StatusConflict, gin.H{"error": "canonical name already exists"})
@@ -117,7 +125,7 @@ func (d *Database) ListNotes(c *gin.Context) {
 		clauses = append(clauses, "deleted_at IS NULL")
 	}
 
-	query := `SELECT id, user_id, canonical_name, created_at, deleted_at FROM notes`
+	query := `SELECT id, user_id, canonical_name, content, created_at, deleted_at FROM notes`
 	if len(clauses) > 0 {
 		query += " WHERE " + strings.Join(clauses, " AND ")
 	}
@@ -136,7 +144,7 @@ func (d *Database) ListNotes(c *gin.Context) {
 	for rows.Next() {
 		var n Note
 		var deleted sql.NullString
-		if err := rows.Scan(&n.ID, &n.UserID, &n.CanonicalName, &n.CreatedAt, &deleted); err != nil {
+		if err := rows.Scan(&n.ID, &n.UserID, &n.CanonicalName, &n.Content, &n.CreatedAt, &deleted); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "scan failed"})
 			return
 		}
@@ -201,9 +209,9 @@ func (d *Database) getNoteByID(ctx context.Context, id string) (Note, error) {
 	var n Note
 	var deleted sql.NullString
 	err := d.DB.QueryRowContext(ctx,
-		`SELECT id, user_id, canonical_name, created_at, deleted_at FROM notes WHERE id = ?`,
+		`SELECT id, user_id, canonical_name, content, created_at, deleted_at FROM notes WHERE id = ?`,
 		id,
-	).Scan(&n.ID, &n.UserID, &n.CanonicalName, &n.CreatedAt, &deleted)
+	).Scan(&n.ID, &n.UserID, &n.CanonicalName, &n.Content, &n.CreatedAt, &deleted)
 	if deleted.Valid {
 		n.DeletedAt = deleted.String
 	}

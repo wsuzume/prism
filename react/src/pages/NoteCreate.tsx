@@ -5,32 +5,38 @@ import Sidebar from "../components/Sidebar";
 type PostPayload = {
   user_id: string;
   canonical_name: string;
+  content: string;
 };
 
 type PostResponse = {
   id: string;
   user_id: string;
   canonical_name: string;
+  content: string;
   created_at: string;
   deleted_at?: string;
 };
 
 const NoteCreate: React.FC = () => {
   const navigate = useNavigate();
-  const [form, setForm] = useState<PostPayload>({ user_id: "", canonical_name: "" });
+  const [form, setForm] = useState<PostPayload>({
+    user_id: "",
+    canonical_name: "",
+    content: "",
+  });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PostResponse | null>(null);
 
-  const onChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+  const onChange: React.ChangeEventHandler<HTMLInputElement | HTMLTextAreaElement> = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const onSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
-    if (!form.user_id.trim() || !form.canonical_name.trim()) {
-      setError("user_id と canonical_name は必須です");
+    if (!form.user_id.trim() || !form.canonical_name.trim() || !form.content.trim()) {
+      setError("user_id と canonical_name と content は必須です");
       return;
     }
     setSubmitting(true);
@@ -46,6 +52,7 @@ const NoteCreate: React.FC = () => {
         body: JSON.stringify({
           user_id: form.user_id.trim(),
           canonical_name: form.canonical_name.trim(),
+          content: form.content.trim(),
         }),
       });
       if (!res.ok) {
@@ -54,7 +61,7 @@ const NoteCreate: React.FC = () => {
       }
       const data: PostResponse = await res.json();
       setResult(data);
-      setForm({ user_id: "", canonical_name: "" });
+      setForm({ user_id: "", canonical_name: "", content: "" });
     } catch (err: any) {
       setError(err?.message ?? "failed to post note");
     } finally {
@@ -127,6 +134,21 @@ const NoteCreate: React.FC = () => {
               required
             />
           </div>
+          <div style={{ display: "grid", gap: 6 }}>
+            <label htmlFor="content" style={labelStyle}>
+              Content
+            </label>
+            <textarea
+              id="content"
+              name="content"
+              value={form.content}
+              onChange={onChange}
+              placeholder="note content"
+              style={{ ...inputStyle, minHeight: 120, resize: "vertical" }}
+              disabled={submitting}
+              required
+            />
+          </div>
 
           {error && (
             <div style={{ color: "crimson", fontSize: 14, lineHeight: 1.4 }}>{error}</div>
@@ -146,6 +168,7 @@ const NoteCreate: React.FC = () => {
                 <InfoRow label="ID" value={result.id} />
                 <InfoRow label="User ID" value={result.user_id} />
                 <InfoRow label="Canonical Name" value={result.canonical_name} />
+                <InfoRow label="Content" value={result.content} />
                 <InfoRow label="Created At" value={result.created_at} />
               </dl>
               <button

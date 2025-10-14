@@ -7,6 +7,7 @@ type Note = {
   id: string;
   user_id: string;
   canonical_name: string;
+  content: string;
   created_at: string;
   deleted_at: string;
 };
@@ -169,6 +170,7 @@ const NotePage: React.FC = () => {
                   <th style={th}>ID</th>
                   <th style={th}>User ID</th>
                   <th style={th}>Canonical Name</th>
+                  <th style={th}>Content</th>
                   <th style={th}>Created</th>
                   <th style={th}>Deleted</th>
                 </tr>
@@ -179,6 +181,7 @@ const NotePage: React.FC = () => {
                     <td style={tdMono}>{n.id}</td>
                     <td style={tdMono}>{n.user_id}</td>
                     <td style={td}>{n.canonical_name}</td>
+                    <td style={td}>{n.content}</td>
                     <td style={td}>{fmt(n.created_at)}</td>
                     <td style={td}>{fmtMaybe(n.deleted_at)}</td>
                   </tr>
@@ -206,6 +209,7 @@ const td: React.CSSProperties = {
   borderBottom: "1px solid #f0f0f0",
   padding: "8px 10px",
   verticalAlign: "top",
+  wordBreak: "break-word",
 };
 
 const tdMono: React.CSSProperties = {
