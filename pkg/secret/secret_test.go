@@ -1,5 +1,5 @@
 // secret_test.go
-package core
+package secret
 
 import (
 	"encoding/base64"

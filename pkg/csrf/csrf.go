@@ -18,7 +18,7 @@ import (
 	"github.com/wsuzume/prism/pkg/cipher"
 	"github.com/wsuzume/prism/pkg/iprange"
 	"github.com/wsuzume/prism/pkg/jwt"
-	"github.com/wsuzume/prism/proxy/msg"
+	"github.com/wsuzume/prism/pkg/msg"
 )
 
 //
