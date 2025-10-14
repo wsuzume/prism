@@ -1,6 +1,6 @@
 // src/pages/Login.tsx
 import React, { useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { setCurrentUser } from "../session";
 
 type LoginUser = {
@@ -18,6 +18,7 @@ const Login: React.FC = () => {
   const [msg, setMsg] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const navigate = useNavigate(); // 追加
 
   const onSubmit: React.FormEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
@@ -66,9 +67,10 @@ const Login: React.FC = () => {
 
       if (res.ok) {
         const user: LoginUser = await res.json();
-        setCurrentUser(user); // ← 追加
-        setMsg(`ログインしました：${user.email}`);
-        form.reset();
+        setCurrentUser(user);
+        // リダイレクト（履歴を置き換え）
+        navigate("/", { replace: true });
+        return;
       } else {
         let detail = "";
         try {
