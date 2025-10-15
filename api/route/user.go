@@ -259,6 +259,19 @@ func (d *Database) LoginUser(c *gin.Context) {
 
 // --- helpers ---
 
+func EnsureUserSchema(db *sql.DB) error {
+	const schema = `
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);`
+	_, err := db.Exec(schema)
+	return err
+}
+
 func (d *Database) getUserByID(ctx context.Context, id string) (User, error) {
 	var u User
 	err := d.DB.QueryRowContext(

@@ -10,7 +10,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/wsuzume/prism/api/route"
-	"github.com/wsuzume/prism/api/schema"
 )
 
 func getenv(k, def string) string {
@@ -32,8 +31,11 @@ func main() {
 	}
 	defer db.Close()
 
-	if err := schema.CreateSchema(db); err != nil {
-		log.Fatalf("create schema: %v", err)
+	if err := route.EnsureUserSchema(db); err != nil {
+		log.Fatalf("create user schema: %v", err)
+	}
+	if err := route.EnsureNoteSchema(db); err != nil {
+		log.Fatalf("create note schema: %v", err)
 	}
 
 	d := &route.Database{DB: db}

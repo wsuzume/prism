@@ -218,6 +218,25 @@ func (d *Database) getNoteByID(ctx context.Context, id string) (Note, error) {
 	return n, err
 }
 
+func EnsureNoteSchema(db *sql.DB) error {
+	const schema = `
+CREATE TABLE IF NOT EXISTS notes (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  canonical_name TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  deleted_at TEXT,
+  UNIQUE(user_id, canonical_name),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_notes_user ON notes(user_id);
+CREATE INDEX IF NOT EXISTS idx_notes_created_at ON notes(created_at);`
+	_, err := db.Exec(schema)
+	return err
+}
+
 func parseBool(v string) bool {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "1", "true", "yes", "on":
