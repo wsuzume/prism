@@ -33,6 +33,7 @@ const Signup: React.FC = () => {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ email, password }),
+        credentials: "include",
       });
 
       if (!res.ok) {

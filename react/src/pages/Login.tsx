@@ -47,7 +47,7 @@ const Login: React.FC = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
         signal: ac.signal,
-        credentials: "same-origin",
+        credentials: "include",
       });
 
       // レスポンス全体を確認
