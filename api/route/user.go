@@ -253,7 +253,7 @@ func (d *Database) LoginUser(c *gin.Context) {
 	}
 
 	secretToken, err := json.Marshal(token.SecretToken{
-		SecretPayload: "secret-token",
+		UserID: u.ID,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode secret token"})
@@ -261,7 +261,7 @@ func (d *Database) LoginUser(c *gin.Context) {
 	}
 
 	accessToken, err := json.Marshal(token.AccessToken{
-		AccessPayload: "access-token",
+		UserID: u.ID,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode access token"})
@@ -269,7 +269,7 @@ func (d *Database) LoginUser(c *gin.Context) {
 	}
 
 	publicToken, err := json.Marshal(token.PublicToken{
-		PublicPayload: "public-token",
+		Email: u.Email,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode public token"})
