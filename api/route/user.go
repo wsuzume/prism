@@ -259,8 +259,7 @@ func (d *Database) LoginUser(c *gin.Context) {
 
 // --- helpers ---
 
-func createSchema(db *sql.DB) error {
-	// TEXT (RFC3339) で時刻保存。email は UNIQUE。
+func EnsureUserSchema(db *sql.DB) error {
 	const schema = `
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
