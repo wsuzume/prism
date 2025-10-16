@@ -3,6 +3,7 @@ package route
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/wsuzume/prism/api/token"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -250,9 +252,33 @@ func (d *Database) LoginUser(c *gin.Context) {
 		return
 	}
 
-	c.Header("PRISM-SECRET", "secret-token")
-	c.Header("PRISM-ACCESS", "access-token")
-	c.Header("PRISM-PUBLIC", "public-token")
+	secretToken, err := json.Marshal(token.SecretToken{
+		SecretPayload: "secret-token",
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode secret token"})
+		return
+	}
+
+	accessToken, err := json.Marshal(token.AccessToken{
+		AccessPayload: "access-token",
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode access token"})
+		return
+	}
+
+	publicToken, err := json.Marshal(token.PublicToken{
+		PublicPayload: "public-token",
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode public token"})
+		return
+	}
+
+	c.Header("PRISM-SECRET", string(secretToken))
+	c.Header("PRISM-ACCESS", string(accessToken))
+	c.Header("PRISM-PUBLIC", string(publicToken))
 
 	c.JSON(http.StatusOK, u)
 }
