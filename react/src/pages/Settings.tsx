@@ -29,6 +29,10 @@ const Settings: React.FC = () => {
         label: "Updated",
         value: user.updated_at ? formatDate(user.updated_at) : "-",
       },
+      {
+        label: "Access Token",
+        value: user.accessToken ? user.accessToken : "-",
+      },
     ];
   }, [user]);
 
