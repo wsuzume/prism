@@ -54,6 +54,7 @@ const NoteCreate: React.FC = () => {
           canonical_name: form.canonical_name.trim(),
           content: form.content.trim(),
         }),
+        credentials: "same-origin",
       });
       if (!res.ok) {
         const text = await res.text().catch(() => "");

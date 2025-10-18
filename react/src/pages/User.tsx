@@ -46,6 +46,7 @@ const UserPage: React.FC = () => {
         const res = await fetch(`/api/user?limit=${limit}&offset=${offset}`, {
           signal: ac.signal,
           headers: { Accept: "application/json" },
+          credentials: "same-origin",
         });
         if (!res.ok) {
           const text = await res.text().catch(() => "");

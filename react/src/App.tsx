@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import NotePage from "./pages/Note";
 import NoteCreate from "./pages/NoteCreate";
 import Signup from "./pages/Signup";
+import Settings from "./pages/Settings";
 import UserPage from "./pages/User";
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/settings" element={<Settings />} />
         <Route path="/note" element={<NotePage />} />
         <Route path="/note/new" element={<NoteCreate />} />
         <Route path="/user" element={<UserPage />} />

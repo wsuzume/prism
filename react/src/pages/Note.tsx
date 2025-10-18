@@ -58,6 +58,7 @@ const NotePage: React.FC = () => {
         const res = await fetch(url, {
           signal: ac.signal,
           headers: { Accept: "application/json" },
+          credentials: "same-origin",
         });
         if (!res.ok) {
           const text = await res.text().catch(() => "");

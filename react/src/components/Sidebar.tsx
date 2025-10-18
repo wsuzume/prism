@@ -32,6 +32,11 @@ const Sidebar: React.FC = () => {
         <NavItem to="/" label="Home" active={loc.pathname === "/"} />
         <NavItem to="/user" label="Users" active={loc.pathname.startsWith("/user")} />
         <NavItem to="/note" label="Notes" active={loc.pathname.startsWith("/note")} />
+        <NavItem
+          to="/settings"
+          label="Settings"
+          active={loc.pathname.startsWith("/settings")}
+        />
         <NavItem to="/login" label="Login" active={loc.pathname.startsWith("/login")} />
         <NavItem to="/signup" label="Signup" active={loc.pathname.startsWith("/signup")} />
       </nav>

@@ -18,6 +18,7 @@ import (
 	"github.com/wsuzume/prism/pkg/cipher"
 	"github.com/wsuzume/prism/pkg/iprange"
 	"github.com/wsuzume/prism/pkg/jwt"
+	"github.com/wsuzume/prism/pkg/mode"
 	"github.com/wsuzume/prism/pkg/msg"
 )
 
@@ -800,13 +801,22 @@ func (p *DoubleSubmitCookieCSRFProtector) ModifyResponse(orig func(*http.Respons
 		accessToken.claims.Usr = encodedAccessPayload
 		accessToken.aad = encodedPublicPayloadBytes
 
-		secretTokenStr, accessTokenStr, err := p.encryptSessionTokens(secretToken, accessToken, encodedPublicPayloadBytes)
+		// secretTokenStr, accessTokenStr, err := p.encryptSessionTokens(secretToken, accessToken, encodedPublicPayloadBytes)
+		secretTokenStr, accessTokenStr, err := p.encryptSessionTokens(secretToken, accessToken, []byte(publicPayload))
 		if err != nil {
 			return err
 		}
 
-		resp.Header.Add("Set-Cookie", p.newSecretCookie(secretTokenStr).String())
-		resp.Header.Add("Set-Cookie", p.newAccessCookie(accessTokenStr).String())
+		secretCookie := p.newSecretCookie(secretTokenStr).String()
+		accessCookie := p.newAccessCookie(accessTokenStr).String()
+
+		resp.Header.Add("Set-Cookie", secretCookie)
+		resp.Header.Add("Set-Cookie", accessCookie)
+
+		if mode.Debug {
+			log.Printf("SecretCookie: %s\n", secretCookie)
+			log.Printf("AccessCookie: %s\n", accessCookie)
+		}
 
 		return nil
 	}
