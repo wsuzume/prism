@@ -33,6 +33,12 @@ const Settings: React.FC = () => {
         label: "Access Token",
         value: user.accessToken ? user.accessToken : "-",
       },
+      {
+        label: "Access Token Payload",
+        value: user.accessTokenPayload
+          ? JSON.stringify(user.accessTokenPayload, null, 2) // 見やすく整形
+          : "-",
+      },
     ];
   }, [user]);
 
