@@ -3,7 +3,6 @@ package csrf
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -191,23 +190,23 @@ func TestModifyResponseEncodesPayloads(t *testing.T) {
 	hdrSecret := &jwt.JwtHeader{Alg: protector.JwtAlg, Cty: protector.JwtCty, Typ: protector.JwtTyp}
 	hdrAccess := &jwt.JwtHeader{Alg: protector.JwtAlg, Cty: protector.JwtCty, Typ: protector.JwtTyp}
 
-	encodedOldSecret := base64.RawURLEncoding.EncodeToString([]byte("secret-old"))
-	encodedOldAccess := base64.RawURLEncoding.EncodeToString([]byte("access-old"))
-	encodedOldPublic := base64.RawURLEncoding.EncodeToString([]byte("public-old"))
+	oldSecret := "secret-old"
+	oldAccess := "access-old"
+	oldPublic := "public-old"
 
 	clSecret := &jwt.JwtClaims{
 		Jti: jti,
 		Iat: now.Unix(),
 		Nbf: now.Unix(),
 		Exp: now.Add(protector.SessionTTL).Unix(),
-		Usr: encodedOldSecret,
+		Usr: oldSecret,
 	}
 	clAccess := &jwt.JwtClaims{
 		Jti: jti,
 		Iat: now.Unix(),
 		Nbf: now.Unix(),
 		Exp: now.Add(protector.RefreshTTL).Unix(),
-		Usr: encodedOldAccess,
+		Usr: oldAccess,
 	}
 
 	info := &renewedInfo{
@@ -215,7 +214,7 @@ func TestModifyResponseEncodesPayloads(t *testing.T) {
 		hdrAccess:     hdrAccess,
 		clSecret:      clSecret,
 		clAccess:      clAccess,
-		publicPayload: []byte(encodedOldPublic),
+		publicPayload: []byte(oldPublic),
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "https://example.com", nil)
@@ -272,10 +271,6 @@ func TestModifyResponseEncodesPayloads(t *testing.T) {
 		t.Fatal("access cookie not issued")
 	}
 
-	encodedSecret := base64.RawURLEncoding.EncodeToString([]byte(secretPayload))
-	encodedAccess := base64.RawURLEncoding.EncodeToString([]byte(accessPayload))
-	encodedPublic := base64.RawURLEncoding.EncodeToString([]byte(publicPayload))
-
 	hdrSecretJSON, clSecretJSON, _, err := jwt.DecryptWithAAD(encrypter, secretCookie.Value)
 	if err != nil {
 		t.Fatalf("failed to decrypt secret cookie: %v", err)
@@ -284,8 +279,8 @@ func TestModifyResponseEncodesPayloads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to unmarshal secret claims: %v", err)
 	}
-	if newSecretClaims.Usr != encodedSecret {
-		t.Fatalf("unexpected secret payload: got %q want %q", newSecretClaims.Usr, encodedSecret)
+	if newSecretClaims.Usr != secretPayload {
+		t.Fatalf("unexpected secret payload: got %q want %q", newSecretClaims.Usr, secretPayload)
 	}
 
 	hdrAccessJSON, clAccessJSON, publicAAD, err := jwt.DecryptWithAAD(encrypter, accessCookie.Value)
@@ -296,10 +291,10 @@ func TestModifyResponseEncodesPayloads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to unmarshal access claims: %v", err)
 	}
-	if newAccessClaims.Usr != encodedAccess {
-		t.Fatalf("unexpected access payload: got %q want %q", newAccessClaims.Usr, encodedAccess)
+	if newAccessClaims.Usr != accessPayload {
+		t.Fatalf("unexpected access payload: got %q want %q", newAccessClaims.Usr, accessPayload)
 	}
-	if string(publicAAD) != encodedPublic {
-		t.Fatalf("unexpected public payload: got %q want %q", string(publicAAD), encodedPublic)
+	if string(publicAAD) != publicPayload {
+		t.Fatalf("unexpected public payload: got %q want %q", string(publicAAD), publicPayload)
 	}
 }
