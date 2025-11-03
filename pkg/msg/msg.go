@@ -9,14 +9,18 @@ const (
 	InvalidOrigin = "InvalidOrigin"
 	// Secret token is broken
 	InvalidSecretToken = "InvalidSecretToken"
+	// The Secret token is missing despite existing an access token
+	MissingSecretToken = "MissingSecretToken"
 	// Access token is missing despite existing an secret token
 	MissingAccessToken = "MissingAccessToken"
 	// Access token is broken
 	InvalidAccessToken = "InvalidAccessToken"
+	// The Access token expired while the SecretToken was still valid
+	InvalidExpiredDate = "InvalidExpiredDate"
 	// Secret token and access token mismatch
 	TokenMismatch = "TokenMismatch"
-	// Double-submitted access token in request header is broken
-	InvalidDoubleSubmitToken = "InvalidDoubleSubmitToken"
+	// Submit token in request header is broken
+	InvalidSubmitToken = "InvalidSubmitToken"
 	// Session is expired
 	SessionExpired = "SessionExpired"
 	// Failed to generate session token

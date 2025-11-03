@@ -484,8 +484,6 @@ func (p *DoubleSubmitCookieCSRFProtector) handleSecretExpiration(
 	req := c.Request
 	ctx := context.WithValue(req.Context(), ctxKeyRenewed{}, info)
 	c.Request = req.WithContext(ctx)
-
-	c.Next()
 }
 
 func (p *DoubleSubmitCookieCSRFProtector) tokensFromContext(req *http.Request) (*decryptedToken, *decryptedToken, bool, error) {
@@ -601,7 +599,7 @@ func (p *DoubleSubmitCookieCSRFProtector) newSessionTokenPair() (*decryptedToken
 	return &decryptedToken{header: secretHeader, claims: secretClaims}, &decryptedToken{header: accessHeader, claims: accessClaims}, nil
 }
 
-func needsSessionUpdate(secretToken, accessToken *decryptedToken, secretPayload, accessPayload string, publicPayload []byte) bool {
+func needsSessionUpdate(secretToken, accessToken *decryptedToken, secretPayload, accessPayload string, publicPayload string) bool {
 	if secretToken == nil || accessToken == nil {
 		return true
 	}
@@ -612,101 +610,154 @@ func needsSessionUpdate(secretToken, accessToken *decryptedToken, secretPayload,
 	if subtle.ConstantTimeCompare([]byte(accessToken.claims.Usr), []byte(accessPayload)) != 1 {
 		return true
 	}
-	if subtle.ConstantTimeCompare(accessToken.aad, publicPayload) != 1 {
+	if subtle.ConstantTimeCompare(accessToken.aad, []byte(publicPayload)) != 1 {
 		return true
 	}
 	return false
 }
 
 // DoubleSubmitCookieCSRFProtection は暗号化されたクッキー/ヘッダーを復号して比較します。
+// パターン:
+//   0. SecretCookie, AccessCookie の両方を持たない
+//        -> 認証していないリクエストとして通す
+//   1. SecretCookie が先に Expired となりブラウザから削除され AccessCookie のみを正常に有する
+//        -> 正常な認証期限切れの状態だが SecretCookie の情報は復元できないため再認証を必要とする
+//   2. SecretCookie を持つが AccessCookie を持たない
+//        -> 一般に AccessCookie のほうが長いためこの状況は Cookie の破損でありエラーとする
+//   3. SecretCookie, AccessCookie を正常に有する
+//     3.1. SecretCookie, AccessCookie ともに期限切れ
+//        -> 再認証を必要とする
+//     3.2. AccessCookie のみ期限切れ
+//        -> 一般に AccessCookie のほうが長いためこの状況は Cookie の破損でありエラーとする
+//     3.3. SecretCookie, AccessCookie のセッションIDが一致しない
+//        -> Cookie の破損でありエラーとする
+//     3.4. SecretCookie のみ期限切れ
+//        -> SecretCookie を再発行して処理を続行する
+//     3.5. SubmitHeader を伴わないリクエストである
+//        -> DoubleSubmitCookie を行わないので SecretHeader, PublicHeader のみセットする
+//     3.6. AccessCookie と SubmitHeader が一致しない
+//        -> DoubleSubmitCookie を行おうとしたが不正な SubmitHeader をセットしているのでエラーとする
+//     3.7. SubmitHeader を伴うリクエストである
+//        -> DoubleSubmitCookie であるとして受理し SecretHeader, AccessHeader, PublicHeader をすべてセットする
 // 仕様:
 // - クライアント送信のバックエンド用ヘッダーが存在したら攻撃として検知して記録するが、攻撃を防いだ上で通常処理する
+// - Cookie が破損している場合は削除するための SetCookie を送信する
 func (p *DoubleSubmitCookieCSRFProtector) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Cookie の Spoofing を検知して記録する
+		// 防げばよいだけでエラーではないので記録だけして正常に処理する
 		p.logSpoofedHeaders(c)
 
+		// 安全のため Spoofing に使われうるヘッダーを削除する
 		c.Request.Header.Del(p.SecretHeaderName)
 		c.Request.Header.Del(p.AccessHeaderName)
 		c.Request.Header.Del(p.PublicHeaderName)
 
-		secretValue, hasSecret := p.cookieValue(c.Request, p.SecretCookieName)
-		accessValue, hasAccess := p.cookieValue(c.Request, p.AccessCookieName)
+		// Cookie を読み取る
+		secretCookie, hasSecret := p.cookieValue(c.Request, p.SecretCookieName)
+		accessCookie, hasAccess := p.cookieValue(c.Request, p.AccessCookieName)
 
-		if !hasSecret {
-			c.Request.Header.Del(p.AccessCookieName)
-			p.deleteSecretCookie(c)
-			p.deleteAccessCookie(c)
+		// パターン0: 認証していないリクエストとして通す
+		if !hasSecret && !hasAccess {
+			// 後の処理で誤解のないよう念の為 SubmitHeader は削除しておく
+			c.Request.Header.Del(p.SubmitHeaderName)
 			c.Next()
 			return
 		}
 
-		secretToken, err := p.decryptToken(secretValue)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.InvalidSecretToken})
+		// パターン1: AccessCookie のみを持つ場合は再認証を必要とする
+		if !hasSecret && hasAccess {
+			// AccessCookie の期限が切れていなければ再発行できる可能性があるため Cookie は消さないが、
+			// SecretCookie を自動復元することができないためエラーとする
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.MissingSecretToken})
 			return
 		}
 
-		if !hasAccess {
-			c.Request.Header.Del(p.AccessCookieName)
+		// パターン2: SecretCookie のみを持つ場合は Cookie の破損とみなす
+		if hasSecret && !hasAccess {
+			// SecretCookie と AccessCookie も明示的に削除しておく
 			p.deleteSecretCookie(c)
 			p.deleteAccessCookie(c)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.MissingAccessToken})
 			return
 		}
 
-		accessToken, err := p.decryptToken(accessValue)
+		// パターン3: SecretCookie, AccessCookie の両方が存在するケース
+
+		// まずは両方とも復号する
+		secretToken, err := p.decryptToken(secretCookie)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.InvalidSecretToken})
+			return
+		}
+	
+		accessToken, err := p.decryptToken(accessCookie)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.InvalidAccessToken})
 			return
 		}
-
+		
 		publicPayload := accessToken.aad
+		
+		// トークンの有効期限を確認する
 		secretAlive := jwt.HasValidLifetime(secretToken.claims, p.ClockSkew)
 		accessAlive := jwt.HasValidLifetime(accessToken.claims, p.ClockSkew)
 
+		// パターン3.1: 両方とも期限切れならその旨を通知するエラーリターン
 		if !secretAlive && !accessAlive {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.SessionExpired})
 			return
 		}
 
-		if !secretAlive {
-			p.handleSecretExpiration(c, secretToken, accessToken, publicPayload)
+		// パターン3.2: AccessCookie のみ期限切れはおかしいのでエラーにする
+		if !accessAlive {
+			// SecretCookie と AccessCookie も明示的に削除しておく
+			p.deleteSecretCookie(c)
+			p.deleteAccessCookie(c)
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.InvalidExpiredDate})
 			return
 		}
 
+		// パターン3.3: SecretCookie, AccessCookie のセッションIDが一致しない
 		if subtle.ConstantTimeCompare([]byte(secretToken.claims.Jti), []byte(accessToken.claims.Jti)) != 1 {
+			// SecretCookie と AccessCookie も明示的に削除しておく
+			p.deleteSecretCookie(c)
+			p.deleteAccessCookie(c)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.TokenMismatch})
 			return
 		}
 
-		submitToken := c.GetHeader(p.AccessCookieName)
+		// パターン3.4: SecretCookie のみ期限切れなので再発行する
+		if !secretAlive {
+			p.handleSecretExpiration(c, secretToken, accessToken, publicPayload)
+		}
+
+		submitToken := c.GetHeader(p.SubmitHeaderName)
+
+		// パターン3.5: DoubleSubmitCookie を行わないリクエストなので SecretHeader, PublicHeader のみセットする
 		if submitToken == "" {
 			c.Request.Header.Set(p.SecretHeaderName, string(secretToken.claimsJSON))
 			if len(publicPayload) > 0 {
 				c.Request.Header.Set(p.PublicHeaderName, string(publicPayload))
 			}
-			c.Request.Header.Del(p.AccessCookieName)
+			c.Request.Header.Del(p.AccessHeaderName)
 			c.Next()
 			return
 		}
 
-		submitDecrypted, err := p.decryptToken(submitToken)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.InvalidDoubleSubmitToken})
+		// パターン3.6: AccessToken と SubmitToken が一致しない
+		if subtle.ConstantTimeCompare([]byte(accessCookie), []byte(submitToken)) != 1 {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.InvalidSubmitToken})
 			return
 		}
 
-		if subtle.ConstantTimeCompare([]byte(secretToken.claims.Jti), []byte(submitDecrypted.claims.Jti)) != 1 {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.TokenMismatch})
-			return
-		}
-
+		// パターン3.7: DobleSubmitCookie として受理されたので SecretHeader, AccessHeader, PublicHeader をすべてセットする
 		c.Request.Header.Set(p.SecretHeaderName, string(secretToken.claimsJSON))
 		c.Request.Header.Set(p.AccessHeaderName, string(accessToken.claimsJSON))
 		if len(publicPayload) > 0 {
 			c.Request.Header.Set(p.PublicHeaderName, string(publicPayload))
 		}
-		c.Request.Header.Del(p.AccessCookieName)
+		c.Request.Header.Del(p.SubmitHeaderName)
 
 		c.Next()
 	}
@@ -731,35 +782,40 @@ func (p *DoubleSubmitCookieCSRFProtector) inIdentityCenterList(resp *http.Respon
 //   - 最後に PRISM-BACKEND-TOKEN ヘッダを除去
 func (p *DoubleSubmitCookieCSRFProtector) ModifyResponse(orig func(*http.Response) error) func(*http.Response) error {
 	return func(resp *http.Response) error {
-		// 先に元の処理
+		// レスポンスから Cookie にセットしたい内容を取得する（JSON形式を想定）
+		secretPayload := resp.Header.Get(p.SecretHeaderName)
+		accessPayload := resp.Header.Get(p.AccessHeaderName)
+		publicPayload := resp.Header.Get(p.PublicHeaderName)
+
+		// レスポンスヘッダからペイロードを削除（消し忘れがないよう読み取ったらすぐに削除）
+		resp.Header.Del(p.SecretHeaderName)
+		resp.Header.Del(p.AccessHeaderName)
+		resp.Header.Del(p.PublicHeaderName)
+
+		// この下からはヘッダーからペイロードが流出する心配がない
+
+		// 元の処理があれば先に実行する
 		if orig != nil {
 			if err := orig(resp); err != nil {
 				return err
 			}
 		}
 
-		secretPayload := resp.Header.Get(p.SecretHeaderName)
-		accessPayload := resp.Header.Get(p.AccessHeaderName)
-		publicPayload := resp.Header.Get(p.PublicHeaderName)
-
-		var publicPayloadBytes []byte
-		if publicPayload != "" {
-			publicPayloadBytes = []byte(publicPayload)
-		}
-
-		resp.Header.Del(p.SecretHeaderName)
-		resp.Header.Del(p.AccessHeaderName)
-		resp.Header.Del(p.PublicHeaderName)
-
+		// どのペイロードも設定されていない場合はやることがないので処理終了
 		if secretPayload == "" && accessPayload == "" && publicPayload == "" {
 			return nil
 		}
 
-		if resp.Request == nil || p.Encrypter == nil {
+		// IdentityCenter が登録されている場合はそこからのレスポンスだけ処理を続行させる
+		// その他は Cookie の上書きを許可しないので処理を中断して素通しする
+		if p.IdentityCenterAddressPool != nil && !p.inIdentityCenterList(resp) {
 			return nil
 		}
 
-		if p.IdentityCenterAddressPool != nil && !p.inIdentityCenterList(resp) {
+		// resp.Request が含まれない場合は IdentityCenter が独自の処理をしている可能性が高く、
+		// よく分からない状況なので何もせずリターンする。
+		// Encrypter が指定されていない場合も暗号化できないのでリターンする。
+		if resp.Request == nil || p.Encrypter == nil {
 			return nil
 		}
 
@@ -774,7 +830,7 @@ func (p *DoubleSubmitCookieCSRFProtector) ModifyResponse(orig func(*http.Respons
 			}
 		}
 
-		if !needsSessionUpdate(secretToken, accessToken, secretPayload, accessPayload, publicPayloadBytes) {
+		if !needsSessionUpdate(secretToken, accessToken, secretPayload, accessPayload, publicPayload) {
 			return nil
 		}
 
@@ -787,7 +843,7 @@ func (p *DoubleSubmitCookieCSRFProtector) ModifyResponse(orig func(*http.Respons
 
 		secretToken.claims.Usr = secretPayload
 		accessToken.claims.Usr = accessPayload
-		accessToken.aad = publicPayloadBytes
+		accessToken.aad = []byte(publicPayload)
 
 		// secretTokenStr, accessTokenStr, err := p.encryptSessionTokens(secretToken, accessToken, encodedPublicPayloadBytes)
 		secretTokenStr, accessTokenStr, err := p.encryptSessionTokens(secretToken, accessToken, []byte(publicPayload))

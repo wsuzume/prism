@@ -42,8 +42,6 @@ image:
 .PHONY: shell
 shell:
 	sudo docker container run -it --rm \
-		-p 80:80 \
-		-p 443:443 \
 		-v ./:/work \
 		go-prism-dev:202507 bash
 
