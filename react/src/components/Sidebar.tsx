@@ -31,6 +31,12 @@ const Sidebar: React.FC = () => {
       <nav style={{ padding: 8, display: "grid", gap: 6, overflowY: "auto" }}>
         <NavItem to="/" label="Home" active={loc.pathname === "/"} />
         <NavItem to="/user" label="Users" active={loc.pathname.startsWith("/user")} />
+        <NavItem to="/note" label="Notes" active={loc.pathname.startsWith("/note")} />
+        <NavItem
+          to="/settings"
+          label="Settings"
+          active={loc.pathname.startsWith("/settings")}
+        />
         <NavItem to="/login" label="Login" active={loc.pathname.startsWith("/login")} />
         <NavItem to="/signup" label="Signup" active={loc.pathname.startsWith("/signup")} />
       </nav>

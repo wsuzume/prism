@@ -88,6 +88,9 @@ func RunReverseProxy(cmd *cobra.Command, args []string) {
 
 	// Double-Submit Cookie（暗号化付き）
 	dscp := csrf.DefaultDoubleSubmitCookieCSRFProtector(encrypter)
+	if mode.Debug {
+		dscp.SecureCookie = false
+	}
 	dscp.IdentityCenterAddressPool, err = iprange.ParseRanges(cfg.IdentityCenterAddresses)
 	if err != nil {
 		log.Fatalf("failed to parse identity_center_addresses: %v", err)
