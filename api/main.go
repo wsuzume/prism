@@ -31,8 +31,11 @@ func main() {
 	}
 	defer db.Close()
 
-	if err := createSchema(db); err != nil {
-		log.Fatalf("create schema: %v", err)
+	if err := route.EnsureUserSchema(db); err != nil {
+		log.Fatalf("create user schema: %v", err)
+	}
+	if err := route.EnsureNoteSchema(db); err != nil {
+		log.Fatalf("create note schema: %v", err)
 	}
 
 	d := &route.Database{DB: db}
@@ -40,22 +43,9 @@ func main() {
 	r := gin.Default()
 	r.GET("/ping", func(c *gin.Context) { c.String(http.StatusOK, "pong") })
 	d.RegisterUserRoutes(r)
+	d.RegisterNoteRoutes(r)
 
 	if err := r.Run(":8080"); err != nil {
 		log.Fatalf("run server: %v", err)
 	}
-}
-
-// このスキーマは route パッケージ側の定義と同一です。
-func createSchema(db *sql.DB) error {
-	const schema = `
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);`
-	_, err := db.Exec(schema)
-	return err
 }

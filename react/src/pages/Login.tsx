@@ -71,6 +71,7 @@ const Login: React.FC = () => {
         setMsg(`ログインしました：${user.email}`);
         form.reset();
         navigate("/", { replace: true });
+
       } else {
         let detail = "";
         try {

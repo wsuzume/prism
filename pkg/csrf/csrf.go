@@ -3,7 +3,6 @@ package csrf
 import (
 	"context"
 	"crypto/subtle"
-	"encoding/base64"
 	"errors"
 	"log"
 	"net"
@@ -18,6 +17,7 @@ import (
 	"github.com/wsuzume/prism/pkg/cipher"
 	"github.com/wsuzume/prism/pkg/iprange"
 	"github.com/wsuzume/prism/pkg/jwt"
+	"github.com/wsuzume/prism/pkg/mode"
 	"github.com/wsuzume/prism/pkg/msg"
 )
 
@@ -118,15 +118,15 @@ func (p *BasicCSRFProtector) Middleware() gin.HandlerFunc {
 // Prism の SecretCookie, AccessCookie に用いられる AES-GCM JWT のフォーマットは以下である。
 //
 // --- SecretCookie ---
-//   base64url(AES-GCM([ base64url(json(JwtHeader)) ] . [ base64url(json(JwtClaims{base64url(secretPayload)})) ]))
+//   base64url(AES-GCM([ base64url(json(JwtHeader)) ] . [ base64url(json(JwtClaims{secretPayload})) ]))
 //
 // --- AccessCookie ---
-//   base64url(AES-GCM([ base64url(json(JwtHeader)) ] . [ base64url(json(JwtClaims{base64url(accessPayload)})) ])) . [ base64url(publicPayload) ]
+//   base64url(AES-GCM([ base64url(json(JwtHeader)) ] . [ base64url(json(JwtClaims{accessPayload})) ])) . [ base64url(publicPayload) ]
 //
 // 仕様の詳細は以下である。
 //   - AES-GCM JWT の JwtHeader, JwtClaims は JSON -> base64url でエンコードされ、"." で結合されたのち全体が AES-GCM で暗号化され、base64url で再エンコードされる。
 //   - AES-GCM JWT は全体が AES-GCM で暗号化される際、AAD を付加してよい。付加した AAD は AES-GCM -> base64url で暗号化された文字列に、"." で結合して付加する。
-//   - secretPayload, accessPayload, publicPayload は Prism によって base64url でエンコードされる。
+//   - secretPayload, accessPayload, publicPayload は Prism によって JWT 化の過程で base64url でエンコードされる。
 //   - SecretCookie の JwtClaims は Usr という拡張フィールドを持ち、secretPayload を保存できる。
 //   - AccessCookie の JwtClaims は Usr という拡張フィールドを持ち、accessPayload を保存できる。
 //   - AccessCookie は publicPayload を AAD として付加できる。すなわち publicPayload は改ざんを検知できる。
@@ -606,10 +606,10 @@ func needsSessionUpdate(secretToken, accessToken *decryptedToken, encodedSecret,
 		return true
 	}
 
-	if subtle.ConstantTimeCompare([]byte(secretToken.claims.Usr), []byte(encodedSecret)) != 1 {
+	if subtle.ConstantTimeCompare([]byte(secretToken.claims.Usr), []byte(secretPayload)) != 1 {
 		return true
 	}
-	if subtle.ConstantTimeCompare([]byte(accessToken.claims.Usr), []byte(encodedAccess)) != 1 {
+	if subtle.ConstantTimeCompare([]byte(accessToken.claims.Usr), []byte(accessPayload)) != 1 {
 		return true
 	}
 	if subtle.ConstantTimeCompare(accessToken.aad, []byte(encodedPublic)) != 1 {
@@ -860,8 +860,16 @@ func (p *DoubleSubmitCookieCSRFProtector) ModifyResponse(orig func(*http.Respons
 			return err
 		}
 
-		resp.Header.Add("Set-Cookie", p.newSecretCookie(secretTokenStr).String())
-		resp.Header.Add("Set-Cookie", p.newAccessCookie(accessTokenStr).String())
+		secretCookie := p.newSecretCookie(secretTokenStr).String()
+		accessCookie := p.newAccessCookie(accessTokenStr).String()
+
+		resp.Header.Add("Set-Cookie", secretCookie)
+		resp.Header.Add("Set-Cookie", accessCookie)
+
+		if mode.Debug {
+			log.Printf("SecretCookie: %s\n", secretCookie)
+			log.Printf("AccessCookie: %s\n", accessCookie)
+		}
 
 		return nil
 	}
