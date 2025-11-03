@@ -601,7 +601,7 @@ func (p *DoubleSubmitCookieCSRFProtector) newSessionTokenPair() (*decryptedToken
 	return &decryptedToken{header: secretHeader, claims: secretClaims}, &decryptedToken{header: accessHeader, claims: accessClaims}, nil
 }
 
-func needsSessionUpdate(secretToken, accessToken *decryptedToken, encodedSecret, encodedAccess string, encodedPublic string) bool {
+func needsSessionUpdate(secretToken, accessToken *decryptedToken, secretPayload, accessPayload string, encodedPublic string) bool {
 	if secretToken == nil || accessToken == nil {
 		return true
 	}
@@ -618,28 +618,6 @@ func needsSessionUpdate(secretToken, accessToken *decryptedToken, encodedSecret,
 	return false
 }
 
-// DoubleSubmitCookieCSRFProtection は暗号化されたクッキー/ヘッダーを復号して比較します。
-// パターン:
-//   0. SecretCookie, AccessCookie の両方を持たない
-//        -> 認証していないリクエストとして通す
-//   1. SecretCookie が先に Expired となりブラウザから削除され AccessCookie のみを正常に有する
-//        -> 正常な認証期限切れの状態だが SecretCookie の情報は復元できないため再認証を必要とする
-//   2. SecretCookie を持つが AccessCookie を持たない
-//        -> 一般に AccessCookie のほうが長いためこの状況は Cookie の破損でありエラーとする
-//   3. SecretCookie, AccessCookie を正常に有する
-//     3.1. SecretCookie, AccessCookie ともに期限切れ
-//        -> 再認証を必要とする
-//     3.2. AccessCookie のみ期限切れ
-//        -> 一般に AccessCookie のほうが長いためこの状況は Cookie の破損でありエラーとする
-//     3.3. SecretCookie, AccessCookie のセッションIDが一致しない
-//        -> Cookie の破損でありエラーとする
-//     3.4. SecretCookie のみ期限切れ
-//        -> SecretCookie を再発行して処理を続行する
-//     3.5. SubmitHeader を伴わないリクエストである
-//        -> DoubleSubmitCookie を行わないので SecretHeader, PublicHeader のみセットする
-// 仕様:
-// - クライアント送信のバックエンド用ヘッダーが存在したら攻撃として検知して記録するが、攻撃を防いだ上で通常処理する
-// - Cookie が破損している場合は削除するための SetCookie を送信する
 func (p *DoubleSubmitCookieCSRFProtector) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Cookie の Spoofing を検知して記録する
@@ -652,11 +630,11 @@ func (p *DoubleSubmitCookieCSRFProtector) Middleware() gin.HandlerFunc {
 		c.Request.Header.Del(p.PublicHeaderName)
 
 		// Cookie を読み取る
-		secretValue, hasSecret := p.cookieValue(c.Request, p.SecretCookieName)
-		accessValue, hasAccess := p.cookieValue(c.Request, p.AccessCookieName)
+		secretCookie, hasSecret := p.cookieValue(c.Request, p.SecretCookieName)
+		accessCookie, hasAccess := p.cookieValue(c.Request, p.AccessCookieName)
 
 		// パターン0: 認証していないリクエストとして通す
-		if !hasSecret & !hasAccess {
+		if !hasSecret && !hasAccess {
 			// 後の処理で誤解のないよう念の為 SubmitHeader は削除しておく
 			c.Request.Header.Del(p.SubmitHeaderName)
 			c.Next()
@@ -664,7 +642,7 @@ func (p *DoubleSubmitCookieCSRFProtector) Middleware() gin.HandlerFunc {
 		}
 
 		// パターン1: AccessCookie のみを持つ場合は再認証を必要とする
-		if !hasSecret & hasAccess {
+		if !hasSecret && hasAccess {
 			// AccessCookie の期限が切れていなければ再発行できる可能性があるため Cookie は消さないが、
 			// SecretCookie を自動復元することができないためエラーとする
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.MissingSecretToken})
@@ -672,7 +650,7 @@ func (p *DoubleSubmitCookieCSRFProtector) Middleware() gin.HandlerFunc {
 		}
 
 		// パターン2: SecretCookie のみを持つ場合は Cookie の破損とみなす
-		if hasSecret & !hasAccess {
+		if hasSecret && !hasAccess {
 			// SecretCookie と AccessCookie も明示的に削除しておく
 			p.deleteSecretCookie(c)
 			p.deleteAccessCookie(c)
@@ -683,13 +661,13 @@ func (p *DoubleSubmitCookieCSRFProtector) Middleware() gin.HandlerFunc {
 		// パターン3: SecretCookie, AccessCookie の両方が存在するケース
 
 		// まずは両方とも復号する
-		secretToken, err := p.decryptToken(secretValue)
+		secretToken, err := p.decryptToken(secretCookie)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.InvalidSecretToken})
 			return
 		}
 	
-		accessToken, err := p.decryptToken(accessValue)
+		accessToken, err := p.decryptToken(accessCookie)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.InvalidAccessToken})
 			return
@@ -743,9 +721,15 @@ func (p *DoubleSubmitCookieCSRFProtector) Middleware() gin.HandlerFunc {
 			return
 		}
 
-		submitDecrypted, err := p.decryptToken(submitToken)
+		// パターン3.6: DobleSubmitCookie を行うリクエストなので SecretHeader, AccessHeader, PublicHeader をすべてセットする
+		_, err := p.decryptToken(submitToken)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.InvalidDoubleSubmitToken})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.InvalidSubmitToken})
+			return
+		}
+
+		if accessCookie != submitToken {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.InvalidSubmitToken})
 			return
 		}
 

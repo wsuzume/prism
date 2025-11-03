@@ -19,8 +19,8 @@ const (
 	InvalidExpiredDate = "InvalidExpiredDate"
 	// Secret token and access token mismatch
 	TokenMismatch = "TokenMismatch"
-	// Double-submitted access token in request header is broken
-	InvalidDoubleSubmitToken = "InvalidDoubleSubmitToken"
+	// Submit token in request header is broken
+	InvalidSubmitToken = "InvalidSubmitToken"
 	// Session is expired
 	SessionExpired = "SessionExpired"
 	// Failed to generate session token
