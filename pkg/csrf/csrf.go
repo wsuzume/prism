@@ -227,6 +227,7 @@ type DoubleSubmitCookieCSRFProtector struct {
 	SecretHeaderName string // secretPayload
 	AccessHeaderName string // accessPayload
 	PublicHeaderName string // publicPayload
+	NotifyHeaderName string // notification
 
 	// Encryption Algorithm
 	Encrypter cipher.EncrypterInterface
