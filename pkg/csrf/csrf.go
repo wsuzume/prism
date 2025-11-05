@@ -187,6 +187,7 @@ const (
 	secretHeaderName = "PRISM-SECRET" // secretPayload
 	accessHeaderName = "PRISM-ACCESS" // accessPayload
 	publicHeaderName = "PRISM-PUBLIC" // publicPayload
+	notifyHeaderName = "PRISM-NOTIFY" // notification
 
 	// JwtHeader
 	defaultAlg = "AES-GCM"
@@ -279,6 +280,7 @@ func DefaultDoubleSubmitCookieCSRFProtector(e cipher.EncrypterInterface) *Double
 		SecretHeaderName: secretHeaderName,
 		AccessHeaderName: accessHeaderName,
 		PublicHeaderName: publicHeaderName,
+		NotifyHeaderName: notifyHeaderName,
 
 		JwtAlg: defaultAlg,
 		JwtCty: defaultCty,
@@ -621,24 +623,24 @@ func needsSessionUpdate(secretToken, accessToken *decryptedToken, secretPayload,
 //   0. SecretCookie, AccessCookie の両方を持たない
 //        -> 認証していないリクエストとして通す
 //   1. SecretCookie が先に Expired となりブラウザから削除され AccessCookie のみを正常に有する
-//        -> 正常な認証期限切れの状態だが SecretCookie の情報は復元できないため再認証を必要とする
+//        -> 正常な認証期限切れの状態だが SecretCookie の情報は復元できないため認証していないリクエストとして通す
 //   2. SecretCookie を持つが AccessCookie を持たない
-//        -> 一般に AccessCookie のほうが長いためこの状況は Cookie の破損でありエラーとする
+//        -> 一般に AccessCookie のほうが長いためこの状況は Cookie の破損であり、Cookie を削除して未認証として通す
 //   3. SecretCookie, AccessCookie を正常に有する
 //     3.1. SecretCookie, AccessCookie ともに期限切れ
-//        -> 再認証を必要とする
+//        -> そのまま未認証として通す
 //     3.2. AccessCookie のみ期限切れ
-//        -> 一般に AccessCookie のほうが長いためこの状況は Cookie の破損でありエラーとする
+//        -> 一般に AccessCookie のほうが長いためこの状況は Cookie の破損であり、Cookie を削除して未認証として通す
 //     3.3. SecretCookie, AccessCookie のセッションIDが一致しない
-//        -> Cookie の破損でありエラーとする
+//        -> Cookie の破損であり、Cookie を削除して未認証として通す
 //     3.4. SecretCookie のみ期限切れ
 //        -> SecretCookie を再発行して処理を続行する
-//     3.5. SubmitHeader を伴わないリクエストである
-//        -> DoubleSubmitCookie を行わないので SecretHeader, PublicHeader のみセットする
+//     3.5. SubmitHeader を伴わない正常なリクエストである
+//        -> DoubleSubmitCookie を行わないので SecretHeader, PublicHeader のみセットして通す
 //     3.6. AccessCookie と SubmitHeader が一致しない
-//        -> DoubleSubmitCookie を行おうとしたが不正な SubmitHeader をセットしているのでエラーとする
-//     3.7. SubmitHeader を伴うリクエストである
-//        -> DoubleSubmitCookie であるとして受理し SecretHeader, AccessHeader, PublicHeader をすべてセットする
+//        -> DoubleSubmitCookie を行おうとしたが不正な SubmitHeader をセットしているので未認証として通す
+//     3.7. SubmitHeader を伴う正常なリクエストである
+//        -> DoubleSubmitCookie であるとして受理し SecretHeader, AccessHeader, PublicHeader をすべてセットして通す
 // 仕様:
 // - クライアント送信のバックエンド用ヘッダーが存在したら攻撃として検知して記録するが、攻撃を防いだ上で通常処理する
 // - Cookie が破損している場合は削除するための SetCookie を送信する
@@ -657,7 +659,7 @@ func (p *DoubleSubmitCookieCSRFProtector) Middleware() gin.HandlerFunc {
 		secretCookie, hasSecret := p.cookieValue(c.Request, p.SecretCookieName)
 		accessCookie, hasAccess := p.cookieValue(c.Request, p.AccessCookieName)
 
-		// パターン0: 認証していないリクエストとして通す
+		// パターン0: 認証していない正常なリクエストとして通す
 		if !hasSecret && !hasAccess {
 			// 後の処理で誤解のないよう念の為 SubmitHeader は削除しておく
 			c.Request.Header.Del(p.SubmitHeaderName)
@@ -665,20 +667,26 @@ func (p *DoubleSubmitCookieCSRFProtector) Middleware() gin.HandlerFunc {
 			return
 		}
 
-		// パターン1: AccessCookie のみを持つ場合は再認証を必要とする
+		// パターン1: AccessCookie のみを持つ場合は未認証として通す
 		if !hasSecret && hasAccess {
 			// AccessCookie の期限が切れていなければ再発行できる可能性があるため Cookie は消さないが、
-			// SecretCookie を自動復元することができないためエラーとする
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.MissingSecretToken})
+			// SecretCookie を自動復元することができないため認証していないリクエストとして通す
+			// 後の処理で誤解のないよう念の為 SubmitHeader は削除しておく
+			c.Request.Header.Del(p.SubmitHeaderName)
+			c.Request.Header.Set(p.NotifyHeaderName, msg.MissingSecretToken)
+			c.Next()
 			return
 		}
 
-		// パターン2: SecretCookie のみを持つ場合は Cookie の破損とみなす
+		// パターン2: SecretCookie のみを持つ場合は Cookie の破損とみなし、Cookie を削除して未認証として通す
 		if hasSecret && !hasAccess {
 			// SecretCookie と AccessCookie も明示的に削除しておく
 			p.deleteSecretCookie(c)
 			p.deleteAccessCookie(c)
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.MissingAccessToken})
+			// 後の処理で誤解のないよう念の為 SubmitHeader は削除しておく
+			c.Request.Header.Del(p.SubmitHeaderName)
+			c.Request.Header.Set(p.NotifyHeaderName, msg.MissingAccessToken)
+			c.Next()
 			return
 		}
 
@@ -687,13 +695,25 @@ func (p *DoubleSubmitCookieCSRFProtector) Middleware() gin.HandlerFunc {
 		// まずは両方とも復号する
 		secretToken, err := p.decryptToken(secretCookie)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.InvalidSecretToken})
+			// SecretCookie と AccessCookie も明示的に削除しておく
+			p.deleteSecretCookie(c)
+			p.deleteAccessCookie(c)
+			// 後の処理で誤解のないよう念の為 SubmitHeader は削除しておく
+			c.Request.Header.Del(p.SubmitHeaderName)
+			c.Request.Header.Set(p.NotifyHeaderName, msg.InvalidSecretToken)
+			c.Next()
 			return
 		}
 	
 		accessToken, err := p.decryptToken(accessCookie)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.InvalidAccessToken})
+			// SecretCookie と AccessCookie も明示的に削除しておく
+			p.deleteSecretCookie(c)
+			p.deleteAccessCookie(c)
+			// 後の処理で誤解のないよう念の為 SubmitHeader は削除しておく
+			c.Request.Header.Del(p.SubmitHeaderName)
+			c.Request.Header.Set(p.NotifyHeaderName, msg.InvalidAccessToken)
+			c.Next()
 			return
 		}
 		
@@ -705,7 +725,10 @@ func (p *DoubleSubmitCookieCSRFProtector) Middleware() gin.HandlerFunc {
 
 		// パターン3.1: 両方とも期限切れならその旨を通知するエラーリターン
 		if !secretAlive && !accessAlive {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.SessionExpired})
+			// 後の処理で誤解のないよう念の為 SubmitHeader は削除しておく
+			c.Request.Header.Del(p.SubmitHeaderName)
+			c.Request.Header.Set(p.NotifyHeaderName, msg.SessionExpired)
+			c.Next()
 			return
 		}
 
@@ -714,7 +737,10 @@ func (p *DoubleSubmitCookieCSRFProtector) Middleware() gin.HandlerFunc {
 			// SecretCookie と AccessCookie も明示的に削除しておく
 			p.deleteSecretCookie(c)
 			p.deleteAccessCookie(c)
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.InvalidExpiredDate})
+			// 後の処理で誤解のないよう念の為 SubmitHeader は削除しておく
+			c.Request.Header.Del(p.SubmitHeaderName)
+			c.Request.Header.Set(p.NotifyHeaderName, msg.InvalidExpiredDate)
+			c.Next()
 			return
 		}
 
@@ -723,7 +749,10 @@ func (p *DoubleSubmitCookieCSRFProtector) Middleware() gin.HandlerFunc {
 			// SecretCookie と AccessCookie も明示的に削除しておく
 			p.deleteSecretCookie(c)
 			p.deleteAccessCookie(c)
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.TokenMismatch})
+			// 後の処理で誤解のないよう念の為 SubmitHeader は削除しておく
+			c.Request.Header.Del(p.SubmitHeaderName)
+			c.Request.Header.Set(p.NotifyHeaderName, msg.TokenMismatch)
+			c.Next()
 			return
 		}
 
@@ -747,7 +776,10 @@ func (p *DoubleSubmitCookieCSRFProtector) Middleware() gin.HandlerFunc {
 
 		// パターン3.6: AccessToken と SubmitToken が一致しない
 		if subtle.ConstantTimeCompare([]byte(accessCookie), []byte(submitToken)) != 1 {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg.InvalidSubmitToken})
+			// 後の処理で誤解のないよう念の為 SubmitHeader は削除しておく
+			c.Request.Header.Del(p.SubmitHeaderName)
+			c.Request.Header.Set(p.NotifyHeaderName, msg.InvalidSubmitToken)
+			c.Next()
 			return
 		}
 
