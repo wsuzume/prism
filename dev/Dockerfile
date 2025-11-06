@@ -1,8 +1,9 @@
 ARG BASE_IMAGE=golang:1.24-bookworm
 FROM ${BASE_IMAGE}
 
-ARG UB_GID
-ARG UB_UID
+ARG UNAME
+ARG UID
+ARG GID
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -18,11 +19,11 @@ RUN apt-get update && \
         wget \
     && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd -g ${UB_GID} ubuntu \
-    && useradd -g ${UB_GID} -u ${UB_UID} -m -s /bin/bash ubuntu \
+RUN groupadd -g ${GID} ${UNAME} \
+    && useradd -g ${GID} -u ${UID} -m -s /bin/bash ${UNAME} \
     && mkdir /work \
-    && chown ubuntu:ubuntu /work
+    && chown ${UID}:${GID} /work
 
-USER ubuntu
+USER ${UNAME}
 
 WORKDIR /work
