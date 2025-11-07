@@ -24,6 +24,7 @@ RUN groupadd -g ${GID} ${UNAME} \
     && mkdir /work \
     && chown ${UID}:${GID} /work
 
-USER ${UNAME}
+ENV PATH="/home/${UNAME}/.local/bin:${PATH}"
 
+USER ${UNAME}
 WORKDIR /work
