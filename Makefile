@@ -61,6 +61,9 @@ PRISM_SRCS := $(shell find ./prism ./pkg -type f -name '*.go')
 prism: $(PRISM_SRCS)
 	go -C ./prism build -o ../${OUTPUT_DIR}/prism
 
+debug/prism: $(PRISM_SRCS)
+	go -C ./prism build -tags debug -o ../${OUTPUT_DIR}/prism
+
 .PHONY: format/prism
 format/prism:
 	go -C ./prism fmt ./...
@@ -69,7 +72,6 @@ format/prism:
 install:
 	mkdir -p ~/.local/bin
 	cp ./bin/prism ~/.local/bin
-
 
 .PHONY: test/pkg
 test/pkg:
