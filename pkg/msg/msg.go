@@ -1,0 +1,30 @@
+package msg
+
+const (
+	// Failed to get origin or referer header for basic CSRF protection
+	MissingOriginAndRefererHeader = "MissingOriginAndRefererHeader"
+	// Origin has invalid format
+	InvalidFormatOrigin = "InvalidFormatOrigin"
+	// The request came from not allowed origin
+	InvalidOrigin = "InvalidOrigin"
+	// Secret token is broken
+	InvalidSecretToken = "InvalidSecretToken"
+	// The Secret token is missing despite existing an access token
+	MissingSecretToken = "MissingSecretToken"
+	// Access token is missing despite existing an secret token
+	MissingAccessToken = "MissingAccessToken"
+	// Access token is broken
+	InvalidAccessToken = "InvalidAccessToken"
+	// The Access token expired while the SecretToken was still valid
+	InvalidExpiredDate = "InvalidExpiredDate"
+	// Secret token and access token mismatch
+	TokenMismatch = "TokenMismatch"
+	// Submit token in request header is broken
+	InvalidSubmitToken = "InvalidSubmitToken"
+	// Session is expired
+	SessionExpired = "SessionExpired"
+	// Failed to generate session token
+	FailedToGenerateSessionToken = "FailedToGenerateSessionToken"
+	// Session tokens are regenerated successfully
+	SessionTokenRegenerated = "SessionTokenRegenerated"
+)
