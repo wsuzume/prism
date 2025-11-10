@@ -6,20 +6,20 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/wsuzume/prism/pkg/proxy"
+	"github.com/wsuzume/prism/pkg/prism"
 )
 
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Show config",
 	Run: func(cmd *cobra.Command, args []string) {
-		path, err := proxy.GetTopPriorityConfig()
+		path, err := prism.GetTopPriorityConfigPath()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to find config file: %v\n", err)
 			os.Exit(1)
 		}
 
-		cfg, err := proxy.LoadConfig(path)
+		cfg, err := prism.LoadConfig(path)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to load config: %v\n", err)
 			os.Exit(1)

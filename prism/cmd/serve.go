@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/wsuzume/prism/pkg/proxy"
+	"github.com/wsuzume/prism/pkg/prism"
 )
 
 var serveCmd = &cobra.Command{
@@ -16,5 +16,5 @@ func init() {
 }
 
 func runReverseProxy(cmd *cobra.Command, args []string) {
-	proxy.Run()
+	prism.Run()
 }

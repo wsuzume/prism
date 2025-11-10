@@ -1,4 +1,4 @@
-package proxy
+package prism
 
 import (
 	"context"
@@ -27,6 +27,21 @@ func newHTTPServer(addr string, handler http.Handler, tlsConfig *tls.Config) *ht
 		ReadHeaderTimeout: ReadHeaderTimeout,
 	}
 }
+
+func serveCommandServer(cs CommandServer) error {
+	// TODO: refactoring
+	var detectErr error
+	if cs.Config.Mode == "unix" {
+		detectErr = context.Canceled
+	} else if cs.Config.Mode == "tcp" {
+		detectErr = http.ErrServerClosed
+	}
+	if err := cs.ListenAndServe(); err != nil && !errors.Is(err, detectErr) {
+		log.Println("command server error:", err)
+	}
+	return nil
+}
+
 
 func serveHTTP(s *http.Server) error {
 	if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -123,7 +138,7 @@ func Run() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	path, err := GetTopPriorityConfig()
+	path, err := GetTopPriorityConfigPath()
 	if err != nil {
 		log.Fatalf("failed to find config file: %v\n", err)
 	}

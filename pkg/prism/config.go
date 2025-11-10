@@ -1,4 +1,4 @@
-package proxy
+package prism
 
 import (
 	"errors"
@@ -17,13 +17,13 @@ const (
 	DefaultUnixSocketPermission = "0600"
 )
 
-type Config struct {
+type PrismConfig struct {
 	CommandServerConfig CommandServerConfig `yaml:"command_server,omitempty"`
 	AesGcmJwtConfig csrf.AesGcmJwtConfig `yaml:"aes_gcm_jwt,omitempty"`
 	Backends map[string]BackendConfig `yaml:"backends,omitempty"`
 }
 
-func (c *Config) Normalize() (*Config, error) {
+func (c *PrismConfig) Normalize() (*PrismConfig, error) {
 	var err error
 
 	// 元の値を壊さないために最初にシャローコピーを作る
@@ -44,7 +44,7 @@ func (c *Config) Normalize() (*Config, error) {
 	return &n, nil
 }
 
-func (c *Config) String() string {
+func (c *PrismConfig) String() string {
 	b, err := yaml.Marshal(c)
 	if err != nil {
 		// Marshal に失敗することはほぼないが、念のためエラー内容を含める
@@ -53,12 +53,12 @@ func (c *Config) String() string {
 	return string(b)
 }
 
-func LoadConfig(path string) (*Config, error) {
+func LoadConfig(path string) (*PrismConfig, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var cfg Config
+	var cfg PrismConfig
 	if err := yaml.Unmarshal(b, &cfg); err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ var configPriorityList = []string{
 
 // GetTopPriorityConfig は優先順リスト内で実在する最初の設定ファイルを返す。
 // 見つからない場合は空文字と nil を返す。
-func GetTopPriorityConfig() (string, error) {
+func GetTopPriorityConfigPath() (string, error) {
 	home, _ := os.UserHomeDir()
 
 	sep := string(os.PathSeparator)
