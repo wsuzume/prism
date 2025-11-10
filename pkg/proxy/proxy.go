@@ -44,35 +44,35 @@ func gracefulStop(s1, s2 *http.Server) {
 }
 
 // コマンドの処理関数
-func commandHandler(cs *CommandSocket, cmd string) string {
-	switch cmd {
-	case "ping":
-		return "pong\n"
-	case "status":
-		return "ok\n"
-	case "reload":
-		// バッファ詰まり回避のため非ブロッキング送信
-		select {
-		case cs.CmdCh <- "reload":
-			return "reloading\n"
-		default:
-			return "busy\n"
-		}
-	default:
-		return "unknown\n"
-	}
-}
+// func commandHandler(cs *CommandSocket, cmd string) string {
+// 	switch cmd {
+// 	case "ping":
+// 		return "pong\n"
+// 	case "status":
+// 		return "ok\n"
+// 	case "reload":
+// 		// バッファ詰まり回避のため非ブロッキング送信
+// 		select {
+// 		case cs.CmdCh <- "reload":
+// 			return "reloading\n"
+// 		default:
+// 			return "busy\n"
+// 		}
+// 	default:
+// 		return "unknown\n"
+// 	}
+// }
 
 func run(ctx context.Context, addr string, handler http.Handler, tlsConfig *tls.Config) error {
-	cs := NewCommandSocket("/tmp/mydaemon.sock")
-	defer cs.Close()
+	// cs := NewCommandSocket("/tmp/mydaemon.sock")
+	// defer cs.Close()
 
-	// コマンドソケット起動
-	go func() {
-		if err := cs.ListenAndServe(ctx, commandHandler); err != nil && !errors.Is(err, context.Canceled) {
-			log.Println("command socket error:", err)
-		}
-	}()
+	// // コマンドソケット起動
+	// go func() {
+	// 	if err := cs.ListenAndServe(ctx, commandHandler); err != nil && !errors.Is(err, context.Canceled) {
+	// 		log.Println("command socket error:", err)
+	// 	}
+	// }()
 
 	for {
 		// ここで s1/s2 を生成して起動
@@ -93,18 +93,6 @@ func run(ctx context.Context, addr string, handler http.Handler, tlsConfig *tls.
 				<-errCh
 			}
 			return ctx.Err()
-
-		case cmd := <-cs.CmdCh:
-			if cmd == "reload" {
-				// 優雅に停止してから再生成へ
-				gracefulStop(s1, s2)
-				for i := 0; i < 2; i++ {
-					<-errCh
-				}
-				// ループ先頭に戻って s1/s2 を再生成・再起動
-				continue
-			}
-
 		case err := <-errCh:
 			// どちらかが異常終了したら両方止めてエラー返却
 			_ = s1.Close()
@@ -115,6 +103,17 @@ func run(ctx context.Context, addr string, handler http.Handler, tlsConfig *tls.
 			case <-time.After(100 * time.Millisecond):
 			}
 			return err
+
+		// case cmd := <-cs.CmdCh:
+		// 	if cmd == "reload" {
+		// 		// 優雅に停止してから再生成へ
+		// 		gracefulStop(s1, s2)
+		// 		for i := 0; i < 2; i++ {
+		// 			<-errCh
+		// 		}
+		// 		// ループ先頭に戻って s1/s2 を再生成・再起動
+		// 		continue
+		// 	}
 		}
 	}
 }
@@ -132,6 +131,11 @@ func Run() {
 	cfg, err := LoadConfig(path)
 	if err != nil {
 		log.Fatalf("failed to load config: %v\n", err)
+	}
+	
+	cfg, err = cfg.Normalize()
+	if err != nil {
+		log.Fatalf("failed to normalize config: %v\n", err)
 	}
 
 	fmt.Printf("Config loaded from %s\n", path)

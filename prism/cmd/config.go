@@ -25,6 +25,12 @@ var configCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		cfg, err = cfg.Normalize()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to normalize config: %v\n", err)
+			os.Exit(1)
+		}
+
 		fmt.Printf("Config loaded from %s\n", path)
 		fmt.Println(cfg.String())
 	},
