@@ -8,15 +8,15 @@ type Notifier interface {
 }
 
 type notifier struct {
-    doneCh  chan struct{}
-    errCh   chan error
+	doneCh chan struct{}
+	errCh  chan error
 }
 
 func NewNotifier() Notifier {
-    return &notifier{
-        doneCh: make(chan struct{}, 1),
-        errCh:  make(chan error, 1),
-    }
+	return &notifier{
+		doneCh: make(chan struct{}, 1),
+		errCh:  make(chan error, 1),
+	}
 }
 
 func (n *notifier) NotifyDone() {
@@ -24,10 +24,10 @@ func (n *notifier) NotifyDone() {
 		return
 	}
 
-    select {
-    case n.doneCh <- struct{}{}:
-    default:
-    }
+	select {
+	case n.doneCh <- struct{}{}:
+	default:
+	}
 }
 
 func (n *notifier) NotifyError(err error) {
@@ -35,10 +35,10 @@ func (n *notifier) NotifyError(err error) {
 		return
 	}
 
-    select {
-    case n.errCh <- err:
-    default:
-    }
+	select {
+	case n.errCh <- err:
+	default:
+	}
 }
 
 func (n *notifier) Done() <-chan struct{} { return n.doneCh }

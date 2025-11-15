@@ -9,8 +9,8 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"syscall"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -32,7 +32,6 @@ func redirect(w http.ResponseWriter, req *http.Request) {
 	target := "https://" + host + req.RequestURI               // Build the HTTPS target URL
 	http.Redirect(w, req, target, http.StatusMovedPermanently) // 301 permanent redirect
 }
-
 
 func normalizeRoute(s string) string {
 	s = strings.TrimSpace(s)
@@ -119,7 +118,7 @@ func Run() {
 	if err != nil {
 		log.Fatalf("failed to load config: %v\n", err)
 	}
-	
+
 	cfg, err = cfg.Normalize()
 	if err != nil {
 		log.Fatalf("failed to normalize config: %v\n", err)
@@ -158,7 +157,7 @@ func Run() {
 		if err != nil {
 			log.Fatalf("failed to load config: %v\n", err)
 		}
-		
+
 		new, err = cfg.Normalize()
 		if err != nil {
 			log.Fatalf("failed to normalize config: %v\n", err)
@@ -183,18 +182,18 @@ func Run() {
 	// Ctrl+C を待機
 	select {
 	case <-sigCh:
-	log.Println("Received interrupt signal, shutting down...")
+		log.Println("Received interrupt signal, shutting down...")
 
-	// 両方のサーバーを優雅に停止
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := s.Shutdown(ctx); err != nil {
-		log.Printf("Error shutting down proxy server: %v", err)
-	}
-	if err := cs.Shutdown(ctx); err != nil {
-		log.Printf("Error shutting down control server: %v", err)
-	}
+		// 両方のサーバーを優雅に停止
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.Shutdown(ctx); err != nil {
+			log.Printf("Error shutting down proxy server: %v", err)
+		}
+		if err := cs.Shutdown(ctx); err != nil {
+			log.Printf("Error shutting down control server: %v", err)
+		}
 
-	log.Println("All servers stopped gracefully.")
+		log.Println("All servers stopped gracefully.")
 	}
 }

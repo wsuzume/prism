@@ -6,7 +6,6 @@ import (
 	"net"
 
 	"github.com/spf13/cobra"
-
 )
 
 var pingCmd = &cobra.Command{

@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	"github.com/spf13/cobra"
-
 )
 
 var reloadCmd = &cobra.Command{

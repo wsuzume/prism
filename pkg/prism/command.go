@@ -3,36 +3,36 @@ package prism
 import (
 	"context"
 	"errors"
-	"strings"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
-	"strconv"
 	"os/user"
-	"time"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 )
 
 // Prism の CommandServer を制御する設定
 //   - Mode: "none"
-//     - CommandServer を起動しない（デフォルトの挙動）
-//     - Port, Address, Path, Owner, Permission の指定を許容しない
+//   - CommandServer を起動しない（デフォルトの挙動）
+//   - Port, Address, Path, Owner, Permission の指定を許容しない
 //   - Mode: "disable"
-//     - CommandServer を起動しない
-//     - Port, Address, Path, Owner, Permission を指定しても無視する
+//   - CommandServer を起動しない
+//   - Port, Address, Path, Owner, Permission を指定しても無視する
 //   - Mode: "unix"
-//     - CommandServer を Unix ソケットで listen する
-//     - Path に Unix ソケットへのパスを指定する
-//     - Owner に Unix ソケットのファイルオーナーを指定する（"user:group" または "uid:gid"）
-//     - Permission に Unix ソケットのファイルパーミッションを指定する
-//     - Port, Address の指定を許容しない
+//   - CommandServer を Unix ソケットで listen する
+//   - Path に Unix ソケットへのパスを指定する
+//   - Owner に Unix ソケットのファイルオーナーを指定する（"user:group" または "uid:gid"）
+//   - Permission に Unix ソケットのファイルパーミッションを指定する
+//   - Port, Address の指定を許容しない
 //   - Mode: "tcp"
-//     - CommandServer を TCP で listen する
-//     - Port または Address のうち一方の指定を許可する
-//     - Port を指定した場合、Address が ":{Port}" であるときの挙動になる
-//     - Address を指定した場合、Address が直接 http.Server の Addr となる
-//     - Path, Owner, Permission の指定を許容しない
+//   - CommandServer を TCP で listen する
+//   - Port または Address のうち一方の指定を許可する
+//   - Port を指定した場合、Address が ":{Port}" であるときの挙動になる
+//   - Address を指定した場合、Address が直接 http.Server の Addr となる
+//   - Path, Owner, Permission の指定を許容しない
 type CommandServerConfig struct {
 	Mode       string `yaml:"mode,omitempty"`
 	Port       string `yaml:"port,omitempty"`
@@ -82,7 +82,6 @@ func (c *CommandServerConfig) Normalize() (*CommandServerConfig, error) {
 		n.Port, n.Address, n.Path, n.Owner, n.Permission = "", "", "", "", ""
 		n.Mode = "disable"
 		return &n, nil
-
 
 	case "unix":
 		// Port/Address は不可（フォーマット段階で弾く）
@@ -283,16 +282,16 @@ func isDigits(s string) bool {
 const readHeaderTimeout = 3 * time.Second
 
 type CommandServer struct {
-	Config CommandServerConfig
-	Handler http.Handler
+	Config            CommandServerConfig
+	Handler           http.Handler
 	ReadHeaderTimeout time.Duration
-	srv *http.Server
+	srv               *http.Server
 }
 
 func NewCommandServer(cfg *CommandServerConfig, handler http.Handler) *CommandServer {
 	return &CommandServer{
-		Config: *cfg,
-		Handler: handler,
+		Config:            *cfg,
+		Handler:           handler,
 		ReadHeaderTimeout: readHeaderTimeout,
 	}
 }
@@ -367,7 +366,7 @@ func (cs *CommandServer) ListenUnixSocket() (net.Listener, error) {
 
 func (cs *CommandServer) ListenAndServe() error {
 	s := &http.Server{
-		Handler: cs.Handler,
+		Handler:           cs.Handler,
 		ReadHeaderTimeout: cs.ReadHeaderTimeout,
 	}
 
@@ -407,8 +406,8 @@ func (cs *CommandServer) ListenAndServe() error {
 }
 
 func (cs *CommandServer) Shutdown(ctx context.Context) error {
-    if cs == nil || cs.srv == nil {
-        return nil
-    }
+	if cs == nil || cs.srv == nil {
+		return nil
+	}
 	return cs.srv.Shutdown(ctx)
 }

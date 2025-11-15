@@ -13,15 +13,15 @@ import (
 )
 
 const (
-	DefaultUnixSocketPath = "/var/run/prism.sock"
+	DefaultUnixSocketPath       = "/var/run/prism.sock"
 	DefaultUnixSocketPermission = "0600"
 )
 
 type PrismConfig struct {
-	CommandServerConfig CommandServerConfig `yaml:"command_server,omitempty"`
-	AesGcmJwtConfig csrf.AesGcmJwtConfig `yaml:"aes_gcm_jwt,omitempty"`
-	AutoTLS bool `yaml:"autotls,omitempty"`
-	Backends map[string]BackendConfig `yaml:"backends,omitempty"`
+	CommandServerConfig CommandServerConfig      `yaml:"command_server,omitempty"`
+	AesGcmJwtConfig     csrf.AesGcmJwtConfig     `yaml:"aes_gcm_jwt,omitempty"`
+	AutoTLS             bool                     `yaml:"autotls,omitempty"`
+	Backends            map[string]BackendConfig `yaml:"backends,omitempty"`
 }
 
 func (c *PrismConfig) Normalize() (*PrismConfig, error) {

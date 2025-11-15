@@ -5,13 +5,12 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	
 )
 
 var rootCmd = &cobra.Command{
 	Use:          "prism",
 	Short:        "Prism is a reverse proxy server with config",
-	SilenceUsage: true,          // エラー時に usage を自動表示しない
+	SilenceUsage: true,            // エラー時に usage を自動表示しない
 	Run:          runReverseProxy, // 追加: デフォルトで serve 相当を実行
 }
 

@@ -13,19 +13,19 @@ import (
 const ReadHeaderTimeout = 3 * time.Second
 
 type ReloadableServer struct {
-	Addr string
-	Handler http.Handler
-	TLSConfig *tls.Config
+	Addr              string
+	Handler           http.Handler
+	TLSConfig         *tls.Config
 	ReadHeaderTimeout time.Duration
-	srv    *http.Server
-	mu     sync.Mutex
+	srv               *http.Server
+	mu                sync.Mutex
 }
 
 func NewReloadableServer(addr string, handler http.Handler, tlsConfig *tls.Config) *ReloadableServer {
 	return &ReloadableServer{
-		Addr: addr,
-		Handler: handler,
-		TLSConfig: tlsConfig,
+		Addr:              addr,
+		Handler:           handler,
+		TLSConfig:         tlsConfig,
 		ReadHeaderTimeout: ReadHeaderTimeout,
 	}
 }
@@ -43,9 +43,9 @@ func (rs *ReloadableServer) Start(h http.Handler, n Notifier) {
 	}
 
 	rs.srv = &http.Server{
-		Addr:    rs.Addr,
-		Handler: rs.Handler,
-		TLSConfig: rs.TLSConfig,
+		Addr:              rs.Addr,
+		Handler:           rs.Handler,
+		TLSConfig:         rs.TLSConfig,
 		ReadHeaderTimeout: rs.ReadHeaderTimeout,
 	}
 

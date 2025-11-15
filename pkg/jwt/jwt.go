@@ -36,13 +36,13 @@ type JwtHeader struct {
 }
 
 type JwtClaims struct {
-	Iss string 			`json:"iss"`           // トークン発行者の識別子
-	Sub string			`json:"sub"`           // トークンの主題の識別子
-	Aud string			`json:"aud"`           // トークンが意図している受信者の識別子
-	Exp int64 			`json:"exp"`           // トークンの有効期限。秒（UNIX time）。
-	Nbf int64 			`json:"nbf"`           // トークンの開始日時。秒。
-	Iat int64 			`json:"iat"`           // トークンの発行日時。秒。
-	Jti string 			`json:"jti"`           // 発行者ごとトークンごとに一意な識別子。
+	Iss string          `json:"iss"`           // トークン発行者の識別子
+	Sub string          `json:"sub"`           // トークンの主題の識別子
+	Aud string          `json:"aud"`           // トークンが意図している受信者の識別子
+	Exp int64           `json:"exp"`           // トークンの有効期限。秒（UNIX time）。
+	Nbf int64           `json:"nbf"`           // トークンの開始日時。秒。
+	Iat int64           `json:"iat"`           // トークンの発行日時。秒。
+	Jti string          `json:"jti"`           // 発行者ごとトークンごとに一意な識別子。
 	Usr json.RawMessage `json:"usr,omitempty"` // ユーザー定義フィールド
 }
 
@@ -277,15 +277,15 @@ func DecryptWithAAD(e cipher.EncrypterInterface, token string) (headerJSON, clai
 	return headerJSON, claimsJSON, aadJSON, nil
 }
 
-type Jwt struct {	
+type Jwt struct {
 	JwtHeader
 	JwtClaims
 }
 
-func (j *Jwt) Header() *JwtHeader { return &j.JwtHeader }
-func (j *Jwt) Claims() *JwtClaims { return &j.JwtClaims }
-func (j *Jwt) MarshalHeader() ([]byte, error) { return MarshalJwtHeader(j.Header()) }
-func (j *Jwt) MarshalClaims() ([]byte, error) { return MarshalJwtClaims(j.Claims()) }
+func (j *Jwt) Header() *JwtHeader               { return &j.JwtHeader }
+func (j *Jwt) Claims() *JwtClaims               { return &j.JwtClaims }
+func (j *Jwt) MarshalHeader() ([]byte, error)   { return MarshalJwtHeader(j.Header()) }
+func (j *Jwt) MarshalClaims() ([]byte, error)   { return MarshalJwtClaims(j.Claims()) }
 func (j *Jwt) Marshal() ([]byte, []byte, error) { return Marshal(j.Header(), j.Claims()) }
 
 func (j *Jwt) UnmarshalHeader(headerJSON []byte) error {
@@ -297,20 +297,20 @@ func (j *Jwt) UnmarshalClaims(claimsJSON []byte) error {
 }
 
 func (j *Jwt) Unmarshal(headerJSON, claimsJSON []byte) error {
-    hdr, err := UnmarshalJwtHeader(headerJSON)
-    if err != nil {
-        return fmt.Errorf("invalid header: %w", err)
-    }
+	hdr, err := UnmarshalJwtHeader(headerJSON)
+	if err != nil {
+		return fmt.Errorf("invalid header: %w", err)
+	}
 
-    cl, err := UnmarshalJwtClaims(claimsJSON)
-    if err != nil {
-        return fmt.Errorf("invalid claims: %w", err)
-    }
+	cl, err := UnmarshalJwtClaims(claimsJSON)
+	if err != nil {
+		return fmt.Errorf("invalid claims: %w", err)
+	}
 
-    // すべて成功した後に構造体へ反映
-    j.JwtHeader = *hdr
-    j.JwtClaims = *cl
-    return nil
+	// すべて成功した後に構造体へ反映
+	j.JwtHeader = *hdr
+	j.JwtClaims = *cl
+	return nil
 }
 
 func (j *Jwt) HasValidLifetime(clockSkew time.Duration) bool {
