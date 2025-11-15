@@ -109,6 +109,8 @@ func Run() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	log.Println("[PRISM] Starting server...")
+
 	path, err := GetTopPriorityConfigPath()
 	if err != nil {
 		log.Fatalf("failed to find config file: %v\n", err)
@@ -124,8 +126,9 @@ func Run() {
 		log.Fatalf("failed to normalize config: %v\n", err)
 	}
 
-	fmt.Printf("Config loaded from %s\n", path)
 	fmt.Println("======")
+	fmt.Printf("Config loaded from %s\n", path)
+	fmt.Println("------")
 	fmt.Print(cfg.String())
 	fmt.Println("======")
 
@@ -158,7 +161,7 @@ func Run() {
 			log.Fatalf("failed to load config: %v\n", err)
 		}
 
-		new, err = cfg.Normalize()
+		new, err = new.Normalize()
 		if err != nil {
 			log.Fatalf("failed to normalize config: %v\n", err)
 		}
@@ -168,7 +171,7 @@ func Run() {
 		r := newReverseProxyRouter(cfg)
 
 		s.Reload(r, n)
-		c.String(http.StatusOK, "Reload")
+		c.String(http.StatusOK, cfg.String())
 	})
 
 	cs := NewCommandServer(&cfg.CommandServerConfig, cmdRouter)
