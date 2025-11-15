@@ -13,13 +13,14 @@ import (
 )
 
 const (
-	DefaultUnixSocketPath = "/var/run/prism"
+	DefaultUnixSocketPath = "/var/run/prism.sock"
 	DefaultUnixSocketPermission = "0600"
 )
 
 type PrismConfig struct {
 	CommandServerConfig CommandServerConfig `yaml:"command_server,omitempty"`
 	AesGcmJwtConfig csrf.AesGcmJwtConfig `yaml:"aes_gcm_jwt,omitempty"`
+	AutoTLS bool `yaml:"autotls,omitempty"`
 	Backends map[string]BackendConfig `yaml:"backends,omitempty"`
 }
 
@@ -62,6 +63,7 @@ func LoadConfig(path string) (*PrismConfig, error) {
 	if err := yaml.Unmarshal(b, &cfg); err != nil {
 		return nil, err
 	}
+
 	return &cfg, nil
 }
 

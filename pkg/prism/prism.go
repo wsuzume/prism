@@ -2,14 +2,15 @@ package prism
 
 import (
 	"context"
-	"crypto/tls"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -17,120 +18,91 @@ import (
 	"github.com/wsuzume/prism/pkg/mode"
 )
 
-const ReadHeaderTimeout = 3 * time.Second
-
-func newHTTPServer(addr string, handler http.Handler, tlsConfig *tls.Config) *http.Server {
-	return &http.Server{
-		Addr:              addr,
-		Handler:           handler,
-		TLSConfig:         tlsConfig,
-		ReadHeaderTimeout: ReadHeaderTimeout,
+// redirect handles redirecting all HTTP traffic to HTTPS using 301 permanent redirect.
+// w   - HTTP response writer
+// req - Incoming user request
+func redirect(w http.ResponseWriter, req *http.Request) {
+	// Defensive: If req.Host is empty, fallback to req.URL.Host
+	// This ensures the redirect URL always has a valid host.
+	host := req.Host
+	if host == "" {
+		host = req.URL.Host
 	}
-}
-
-func serveCommandServer(cs CommandServer) error {
-	// TODO: refactoring
-	var detectErr error
-	if cs.Config.Mode == "unix" {
-		detectErr = context.Canceled
-	} else if cs.Config.Mode == "tcp" {
-		detectErr = http.ErrServerClosed
-	}
-	if err := cs.ListenAndServe(); err != nil && !errors.Is(err, detectErr) {
-		log.Println("command server error:", err)
-	}
-	return nil
+	// Note: Host may be an IPv6 literal (e.g., [::1]:8080); that's acceptable in URLs.
+	target := "https://" + host + req.RequestURI               // Build the HTTPS target URL
+	http.Redirect(w, req, target, http.StatusMovedPermanently) // 301 permanent redirect
 }
 
 
-func serveHTTP(s *http.Server) error {
-	if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return err
+func normalizeRoute(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.Trim(s, "/") // 両端の "/" を除去
+	if s == "" {
+		return "/" // 空や "/" 相当はルート
 	}
-	return nil
+	return "/" + s // 先頭のみ "/" を付与
 }
 
-func gracefulStop(s1, s2 *http.Server) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	fmt.Println("Shutting down the servers")
-	_ = s1.Shutdown(ctx)
-	_ = s2.Shutdown(ctx)
-}
+func newReverseProxyRouter(cfg *PrismConfig) *gin.Engine {
+	r := gin.New()
+	r.Use(gin.Recovery(), gin.Logger())
 
-// コマンドの処理関数
-// func commandHandler(cs *CommandSocket, cmd string) string {
-// 	switch cmd {
-// 	case "ping":
-// 		return "pong\n"
-// 	case "status":
-// 		return "ok\n"
-// 	case "reload":
-// 		// バッファ詰まり回避のため非ブロッキング送信
-// 		select {
-// 		case cs.CmdCh <- "reload":
-// 			return "reloading\n"
-// 		default:
-// 			return "busy\n"
-// 		}
-// 	default:
-// 		return "unknown\n"
-// 	}
-// }
+	for name, backend := range cfg.Backends {
+		// ループ変数のアドレス捕捉を避ける
+		n := name
+		b := backend
 
-func run(ctx context.Context, addr string, handler http.Handler, tlsConfig *tls.Config) error {
-	// cs := NewCommandSocket("/tmp/mydaemon.sock")
-	// defer cs.Close()
-
-	// // コマンドソケット起動
-	// go func() {
-	// 	if err := cs.ListenAndServe(ctx, commandHandler); err != nil && !errors.Is(err, context.Canceled) {
-	// 		log.Println("command socket error:", err)
-	// 	}
-	// }()
-
-	for {
-		// ここで s1/s2 を生成して起動
-		s1 := newHTTPServer(addr, handler, tlsConfig) // addr を使う
-		s2 := newHTTPServer(":8081", handler, tlsConfig)
-
-		errCh := make(chan error, 2)
-		fmt.Println("Starting server...")
-		go func() { errCh <- serveHTTP(s1) }()
-		go func() { errCh <- serveHTTP(s2) }()
-
-		// イベント待ち
-		select {
-		case <-ctx.Done():
-			gracefulStop(s1, s2)
-			// 両サーバ終了まで待機（2回受信）
-			for i := 0; i < 2; i++ {
-				<-errCh
-			}
-			return ctx.Err()
-		case err := <-errCh:
-			// どちらかが異常終了したら両方止めてエラー返却
-			_ = s1.Close()
-			_ = s2.Close()
-			// 片方残っている可能性があるので念のためもう一つも受ける
-			select {
-			case <-errCh:
-			case <-time.After(100 * time.Millisecond):
-			}
-			return err
-
-		// case cmd := <-cs.CmdCh:
-		// 	if cmd == "reload" {
-		// 		// 優雅に停止してから再生成へ
-		// 		gracefulStop(s1, s2)
-		// 		for i := 0; i < 2; i++ {
-		// 			<-errCh
-		// 		}
-		// 		// ループ先頭に戻って s1/s2 を再生成・再起動
-		// 		continue
-		// 	}
+		target, err := url.Parse(b.TargetURL)
+		if err != nil {
+			log.Fatalf("parse %s url (%s): %v", n, b.TargetURL, err)
 		}
+
+		proxy := httputil.NewSingleHostReverseProxy(target)
+
+		// 追加: エラーハンドラ（バックエンドが落ちている等）
+		proxy.ErrorHandler = func(w http.ResponseWriter, req *http.Request, e error) {
+			// 値は出さない（情報漏えい防止）／URI とリモートは記録
+			log.Printf("proxy error: backend=%s target=%s remote=%s uri=%s err=%v",
+				n, target.String(), req.RemoteAddr, req.URL.RequestURI(), e)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		}
+
+		if n == "default" {
+			// デフォルトバックエンド：どのルートにも一致しなかった場合
+			r.NoRoute(func(c *gin.Context) {
+				proxy.ServeHTTP(c.Writer, c.Request)
+			})
+			continue
+		}
+
+		// 個別バックエンド
+		route := normalizeRoute(b.Route)
+
+		handler := func(c *gin.Context) {
+			if b.RemovePrefix {
+				// Gin の /*proxyPath から残りを取り出す（先頭に "/" が付く）
+				trimmed := c.Param("proxyPath")
+				if trimmed == "" {
+					trimmed = "/"
+				}
+				// リクエストを書き換えてバックエンドへ
+				c.Request.URL.Path = trimmed
+				c.Request.URL.RawPath = trimmed
+			}
+			proxy.ServeHTTP(c.Writer, c.Request)
+		}
+
+		// 例: "/api" にもマッチ
+		r.Any(route, handler)
+		// 例: "/api/foo" にマッチ
+		r.Any(route+"/*proxyPath", handler)
 	}
+
+	r.GET("/", func(c *gin.Context) {
+		c.String(http.StatusOK, "Hello, World!")
+	})
+
+	return r
 }
 
 func Run() {
@@ -158,17 +130,71 @@ func Run() {
 	fmt.Print(cfg.String())
 	fmt.Println("======")
 
-	// Ctrl+C / SIGTERM を捕捉してコンテキストを閉じる
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	n := NewNotifier()
 
-	r := gin.New()
-	r.Use(gin.Recovery(), gin.Logger())
-	r.GET("/", func(c *gin.Context) {
+	// SIGINT / SIGTERM を受け取るチャネル
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
+	if cfg.AutoTLS {
+		s80 := NewReloadableServer(":http", http.HandlerFunc(redirect), nil)
+		s80.Start(nil, n)
+	}
+
+	r := newReverseProxyRouter(cfg)
+	s := NewReloadableServer(":8080", r, nil)
+	s.Start(nil, n)
+
+	cmdRouter := gin.New()
+	cmdRouter.Use(gin.Recovery(), gin.Logger())
+	cmdRouter.GET("/", func(c *gin.Context) {
 		c.String(http.StatusOK, "Hello, World!")
 	})
+	cmdRouter.GET("/reload", func(c *gin.Context) {
+		log.Println("Reloading the proxy server")
 
-	if err := run(ctx, ":8080", r, nil); err != nil && !errors.Is(err, context.Canceled) {
-		log.Println("server stopped with error:", err)
+		new, err := LoadConfig(path)
+		if err != nil {
+			log.Fatalf("failed to load config: %v\n", err)
+		}
+		
+		new, err = cfg.Normalize()
+		if err != nil {
+			log.Fatalf("failed to normalize config: %v\n", err)
+		}
+
+		cfg.Backends = new.Backends
+
+		r := newReverseProxyRouter(cfg)
+
+		s.Reload(r, n)
+		c.String(http.StatusOK, "Reload")
+	})
+
+	cs := NewCommandServer(&cfg.CommandServerConfig, cmdRouter)
+
+	go func() {
+		if err := cs.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("command server error: %v\n", err)
+		}
+	}()
+
+	// Ctrl+C を待機
+	select {
+	case <-sigCh:
+	log.Println("Received interrupt signal, shutting down...")
+
+	// 両方のサーバーを優雅に停止
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.Shutdown(ctx); err != nil {
+		log.Printf("Error shutting down proxy server: %v", err)
+	}
+	if err := cs.Shutdown(ctx); err != nil {
+		log.Printf("Error shutting down control server: %v", err)
+	}
+
+	log.Println("All servers stopped gracefully.")
 	}
 }

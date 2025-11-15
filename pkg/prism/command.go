@@ -1,6 +1,7 @@
 package prism
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"fmt"
@@ -279,11 +280,21 @@ func isDigits(s string) bool {
 	return true
 }
 
+const readHeaderTimeout = 3 * time.Second
 
 type CommandServer struct {
 	Config CommandServerConfig
 	Handler http.Handler
 	ReadHeaderTimeout time.Duration
+	srv *http.Server
+}
+
+func NewCommandServer(cfg *CommandServerConfig, handler http.Handler) *CommandServer {
+	return &CommandServer{
+		Config: *cfg,
+		Handler: handler,
+		ReadHeaderTimeout: readHeaderTimeout,
+	}
 }
 
 // ListenUnixSocket は、Normalize 済み cfg を用いて UNIX ソケットで Listen し、
@@ -360,6 +371,8 @@ func (cs *CommandServer) ListenAndServe() error {
 		ReadHeaderTimeout: cs.ReadHeaderTimeout,
 	}
 
+	cs.srv = s
+
 	var (
 		ln  net.Listener
 		err error
@@ -391,4 +404,11 @@ func (cs *CommandServer) ListenAndServe() error {
 	}
 
 	return s.Serve(ln)
+}
+
+func (cs *CommandServer) Shutdown(ctx context.Context) error {
+    if cs == nil || cs.srv == nil {
+        return nil
+    }
+	return cs.srv.Shutdown(ctx)
 }
