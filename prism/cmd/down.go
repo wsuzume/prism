@@ -10,9 +10,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var reloadCmd = &cobra.Command{
-	Use:   "reload",
-	Short: "reload via socket",
+var downCmd = &cobra.Command{
+	Use:   "down",
+	Short: "shutdown via socket",
 	Run: func(cmd *cobra.Command, args []string) {
 		const sock = "/tmp/prism.sock"
 
@@ -26,7 +26,7 @@ var reloadCmd = &cobra.Command{
 			},
 		}
 		// addr はダミーでよい（http.Client 的には必要なため）
-		resp, err := client.Post("http://unix/reload", "text/plain", nil)
+		resp, err := client.Post("http://unix/down", "text/plain", nil)
 		if err != nil {
 			panic(err)
 		}
@@ -39,5 +39,5 @@ var reloadCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(reloadCmd)
+	rootCmd.AddCommand(downCmd)
 }

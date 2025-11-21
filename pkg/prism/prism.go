@@ -126,11 +126,13 @@ func Run() {
 		log.Fatalf("failed to normalize config: %v\n", err)
 	}
 
-	fmt.Println("======")
-	fmt.Printf("Config loaded from %s\n", path)
-	fmt.Println("------")
-	fmt.Print(cfg.String())
-	fmt.Println("======")
+	if !mode.Debug {
+		fmt.Println("======")
+		fmt.Printf("Config loaded from %s\n", path)
+		fmt.Println("------")
+		fmt.Print(cfg.String())
+		fmt.Println("======")
+	}
 
 	n := NewNotifier()
 
@@ -138,6 +140,8 @@ func Run() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sigCh)
+
+	cmdCh := make(chan int, 1)
 
 	if cfg.AutoTLS {
 		s80 := NewReloadableServer(":http", http.HandlerFunc(redirect), nil)
@@ -153,7 +157,12 @@ func Run() {
 	cmdRouter.GET("/", func(c *gin.Context) {
 		c.String(http.StatusOK, "Hello, World!")
 	})
-	cmdRouter.GET("/reload", func(c *gin.Context) {
+	cmdRouter.POST("/down", func(c *gin.Context) {
+		log.Println("Shutdown the proxy server")
+
+		cmdCh <- 1
+	})
+	cmdRouter.POST("/reload", func(c *gin.Context) {
 		log.Println("Reloading the proxy server")
 
 		new, err := LoadConfig(path)
@@ -184,6 +193,20 @@ func Run() {
 
 	// Ctrl+C を待機
 	select {
+	case <-cmdCh:
+		log.Println("Received interrupt signal, shutting down...")
+
+		// 両方のサーバーを優雅に停止
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.Shutdown(ctx); err != nil {
+			log.Printf("Error shutting down proxy server: %v", err)
+		}
+		if err := cs.Shutdown(ctx); err != nil {
+			log.Printf("Error shutting down control server: %v", err)
+		}
+
+		log.Println("All servers stopped gracefully.")
 	case <-sigCh:
 		log.Println("Received interrupt signal, shutting down...")
 
