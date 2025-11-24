@@ -73,6 +73,10 @@ install:
 	mkdir -p ~/.local/bin
 	cp ./bin/prism ~/.local/bin
 
+.PHONY: format/pkg
+format/pkg:
+	go -C ./pkg fmt ./...
+
 .PHONY: test/pkg
 test/pkg:
 	go -C ./pkg test -v -race -count=1 -failfast ./...
