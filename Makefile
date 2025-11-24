@@ -40,3 +40,43 @@ shell:
 .PHONY: reset
 reset:
 	sudo docker container rm go-prism-dev
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Repository Management
+# ──────────────────────────────────────────────────────────────────────────────
+
+.PHONY: init
+init:
+	rm -f go.work*
+	go work init
+	go work use ./pkg
+	go work use ./prism
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Command Line Tool
+# ──────────────────────────────────────────────────────────────────────────────
+
+PRISM_SRCS := $(shell find ./prism ./pkg -type f -name '*.go')
+
+prism: $(PRISM_SRCS)
+	go -C ./prism build -o ../${OUTPUT_DIR}/prism
+
+debug/prism: $(PRISM_SRCS)
+	go -C ./prism build -tags debug -o ../${OUTPUT_DIR}/prism
+
+.PHONY: format/prism
+format/prism:
+	go -C ./prism fmt ./...
+
+.PHONY: install
+install:
+	mkdir -p ~/.local/bin
+	cp ./bin/prism ~/.local/bin
+
+.PHONY: format/pkg
+format/pkg:
+	go -C ./pkg fmt ./...
+
+.PHONY: test/pkg
+test/pkg:
+	go -C ./pkg test -v -race -count=1 -failfast ./...
