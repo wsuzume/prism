@@ -74,8 +74,10 @@ type BackendConfig struct {
 }
 
 var configPriorityList = []string{
-	"./config.yml",
-	"./config.yaml",
+	"./prism.yml",
+	"./prism.yaml",
+	"./config.d/prism.yml",
+	"./config.d/prism.yaml",
 	"~/.prism/config.yml",
 	"~/.prism/config.yaml",
 	"~/.config/prism/config.yml",
