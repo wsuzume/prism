@@ -1,0 +1,86 @@
+name: Create release tag and release note.
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+jobs:
+  create-release-tag:
+    if: github.event.pull_request.merged == true
+    
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+    
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TZ: "Asia/Tokyo"
+
+    steps:
+      - uses: actions/checkout@v6
+      
+      # 前回のリリースタグを取得する
+      - name: Get previous tag
+        id: pre_tag
+        run: |
+          tag=$(gh release view --repo ${{ github.repository }} --json tagName -q '.tagName' 2>/dev/null || echo "")
+          echo "pre_tag=${tag}" >> $GITHUB_OUTPUT
+      
+      # タグを生成する 「{YYYY.MM.DD}-{当日リリース回数}」
+      - name: Generate tag
+        id: release_tag
+        run: |
+          today=$(date +'%Y.%m.%d')
+          pre_tag="${{ steps.pre_tag.outputs.pre_tag }}"
+
+          if [[ -z "$pre_tag" ]]; then
+            echo "release_tag=$today-1" >> $GITHUB_OUTPUT
+          else
+            pre_release_date=$(echo "$pre_tag" | awk -F'-' '{print $1}')
+            pre_release_count=$(echo "$pre_tag" | awk -F'-' '{print $2}')
+
+            if [[ "$pre_release_date" != "$today" ]]; then
+              pre_release_count=0
+            fi
+
+            echo "release_tag=$today-$(($pre_release_count + 1))" >> $GITHUB_OUTPUT
+          fi
+
+      # PRのDescriptionを取得する
+      - name: Get pr description
+        id: pr_description
+        run: |
+          body=$(gh pr view ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --json body -q '.body // ""')
+          echo "pr_description=$body" >> $GITHUB_OUTPUT
+
+      # 前回リリースからの差分をもとに、変更点を取得する
+      - name: Generate release note changes
+        id: changes
+        run: |
+          changes=$(gh api \
+            --method POST \
+            /repos/${{ github.repository }}/releases/generate-notes \
+            -f tag_name="${{ steps.release_tag.outputs.release_tag }}" \
+            -f previous_tag_name="${{ steps.pre_tag.outputs.pre_tag }}" \
+            -f target_commitish="main" \
+            --jq '.body')
+          echo "changes=$changes" >> $GITHUB_OUTPUT
+
+      # リリースノートの本文を作成する
+      - name: Create release note body
+        id: release_note_body
+        run: |
+          body="${{ steps.pr_description.outputs.pr_description }}"$'\n'"${{ steps.changes.outputs.changes }}"
+          echo "release_note_body=$body" >> $GITHUB_OUTPUT
+
+      # タグを切り、リリースノートを作成する
+      - name: Create Release
+        run: |
+          gh release create ${{ steps.release_tag.outputs.release_tag }} \
+            --repo ${{ github.repository }} \
+            --target main \
+            --title "${{ steps.release_tag.outputs.release_tag }}" \
+            --notes "${{ steps.release_note_body.outputs.release_note_body }}"

@@ -1,0 +1,17 @@
+changelog:
+  exclude:
+    authors:
+      - github-actions      # github-actions bot のPRはリリースノートに含めない
+  categories:
+    - title: New Features   # ラベル "feature" がついたPRはここ
+      labels:
+        - "feature"
+    - title: Bug Fixes      # ラベル "bug" がついたPRはここ
+      labels:
+        - "bug"
+    - title: Hot Fixes      # ラベル "hotfix" がついたPRはここ
+      labels:
+        - "hotfix"
+    - title: Other Changes  # どのラベルにも該当しないPRはここ（ワイルドカード）
+      labels:
+        - "*"
