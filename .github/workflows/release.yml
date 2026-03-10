@@ -54,7 +54,9 @@ jobs:
         id: pr_description
         run: |
           body=$(gh pr view ${{ github.event.pull_request.number }} --repo ${{ github.repository }} --json body -q '.body // ""')
-          echo "pr_description=$body" >> $GITHUB_OUTPUT
+          echo "pr_description<<EOF" >> $GITHUB_OUTPUT
+          echo "$body" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       # 前回リリースからの差分をもとに、変更点を取得する
       - name: Generate release note changes
@@ -67,14 +69,18 @@ jobs:
             -f previous_tag_name="${{ steps.pre_tag.outputs.pre_tag }}" \
             -f target_commitish="main" \
             --jq '.body')
-          echo "changes=$changes" >> $GITHUB_OUTPUT
+          echo "changes<<EOF" >> $GITHUB_OUTPUT
+          echo "$changes" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       # リリースノートの本文を作成する
       - name: Create release note body
         id: release_note_body
         run: |
           body="${{ steps.pr_description.outputs.pr_description }}"$'\n'"${{ steps.changes.outputs.changes }}"
-          echo "release_note_body=$body" >> $GITHUB_OUTPUT
+          echo "release_note_body<<EOF" >> $GITHUB_OUTPUT
+          echo "$body" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       # タグを切り、リリースノートを作成する
       - name: Create Release
