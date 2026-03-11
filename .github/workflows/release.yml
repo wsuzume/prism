@@ -87,11 +87,21 @@ jobs:
           echo "$body" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      # タグを切り、リリースノートを作成する
+      # バイナリをビルドする
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build binaries
+        run: make all
+
+      # タグを切り、リリースノートを作成し、バイナリをアップロードする
       - name: Create Release
         run: |
           gh release create ${{ steps.release_tag.outputs.release_tag }} \
             --repo ${{ github.repository }} \
             --target main \
             --title "${{ steps.release_tag.outputs.release_tag }}" \
-            --notes "${{ steps.release_note_body.outputs.release_note_body }}"
+            --notes "${{ steps.release_note_body.outputs.release_note_body }}" \
+            ./bin/*

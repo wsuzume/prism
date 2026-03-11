@@ -47,6 +47,9 @@ reset:
 
 PRISM_SRCS := $(shell find ./prism ./pkg -type f -name '*.go')
 
+all:
+	go -C ./prism build -o ../${OUTPUT_DIR}/prism
+
 prism: $(PRISM_SRCS)
 	go -C ./prism build -o ../${OUTPUT_DIR}/prism
 
