@@ -2,7 +2,7 @@ UNAME := $(shell id -un)
 UID := $(shell id -u)
 GID := $(shell id -g)
 
-BASE_IMAGE := golang:1.24-bookworm
+BASE_IMAGE := golang:1.26-trixie
 
 OUTPUT_DIR := bin
 
@@ -10,7 +10,7 @@ OUTPUT_DIR := bin
 #  Development Environment
 # ──────────────────────────────────────────────────────────────────────────────
 
-DEV_IMAGE_TAG := 202507
+DEV_IMAGE_TAG := 202603
 
 .PHONY: image
 image:
