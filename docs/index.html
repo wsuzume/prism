@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prism — Stateless Session Reverse Proxy</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --accent2: #a371f7;
+      --green: #3fb950;
+      --code-bg: #1f2937;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Nav */
+    nav {
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+    nav .logo {
+      font-size: 1.1rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    nav .nav-links { margin-left: auto; display: flex; gap: 1.5rem; font-size: 0.9rem; color: var(--muted); }
+    nav .nav-links a { color: var(--muted); }
+    nav .nav-links a:hover { color: var(--text); }
+
+    /* Hero */
+    .hero {
+      max-width: 860px;
+      margin: 5rem auto 4rem;
+      padding: 0 2rem;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 1rem;
+    }
+    .hero p {
+      font-size: 1.15rem;
+      color: var(--muted);
+      max-width: 600px;
+      margin: 0 auto 2rem;
+    }
+    .badges { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2.5rem; }
+    .badge {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2rem;
+      padding: 0.3rem 0.85rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .badge.green { border-color: var(--green); color: var(--green); }
+    .badge.blue  { border-color: var(--accent); color: var(--accent); }
+    .cta-group { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1.4rem;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; text-decoration: none; }
+    .btn-primary { background: var(--accent); color: #0d1117; }
+    .btn-outline { border: 1px solid var(--border); color: var(--text); background: transparent; }
+
+    /* Sections */
+    section { max-width: 900px; margin: 0 auto 5rem; padding: 0 2rem; }
+    h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Feature grid */
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.4rem;
+    }
+    .card .icon { font-size: 1.5rem; margin-bottom: 0.75rem; }
+    .card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.4rem; }
+    .card p { font-size: 0.875rem; color: var(--muted); }
+
+    /* Architecture diagram */
+    .arch {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 2rem;
+      overflow-x: auto;
+    }
+    .arch pre {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.7;
+      white-space: pre;
+    }
+    .arch pre .hl { color: var(--accent); }
+    .arch pre .hl2 { color: var(--accent2); }
+    .arch pre .ok { color: var(--green); }
+
+    /* Cookie table */
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    th {
+      text-align: left;
+      padding: 0.6rem 1rem;
+      border-bottom: 2px solid var(--border);
+      color: var(--muted);
+      font-weight: 600;
+    }
+    td {
+      padding: 0.6rem 1rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: var(--code-bg);
+      padding: 0.15em 0.45em;
+      border-radius: 4px;
+      font-size: 0.85em;
+    }
+
+    /* Quick start */
+    .code-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      overflow-x: auto;
+    }
+    .code-block pre {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.875rem;
+      line-height: 1.7;
+      color: var(--text);
+    }
+    .code-block .comment { color: var(--muted); }
+    .code-block .cmd { color: var(--green); }
+
+    /* Token format */
+    .token-format {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1rem;
+      overflow-x: auto;
+    }
+    .token-format pre {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.82rem;
+      line-height: 1.8;
+      color: var(--muted);
+      white-space: pre;
+    }
+    .token-format .label { color: var(--accent2); font-weight: 600; }
+    .token-format .enc   { color: var(--accent); }
+    .token-format .plain { color: var(--green); }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      text-align: center;
+      padding: 2rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    @media (max-width: 600px) {
+      nav .nav-links { display: none; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <span class="logo">▲ Prism</span>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how-it-works">How it works</a>
+    <a href="#quickstart">Quick start</a>
+    <a href="https://github.com/wsuzume/prism">GitHub</a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<div class="hero">
+  <h1>Stateless Session<br>Reverse Proxy</h1>
+  <p>Prism は AES-GCM 暗号化付き Double-Submit Cookie によって、<br>サーバーサイドのセッションストアを必要とせずに安全なセッション管理を実現します。</p>
+  <div class="badges">
+    <span class="badge blue">Go</span>
+    <span class="badge">AES-GCM JWT</span>
+    <span class="badge">Double-Submit Cookie</span>
+    <span class="badge green">CSRF Protection</span>
+    <span class="badge">Stateless</span>
+  </div>
+  <div class="cta-group">
+    <a class="btn btn-primary" href="#quickstart">Get started</a>
+    <a class="btn btn-outline" href="https://github.com/wsuzume/prism">View on GitHub</a>
+  </div>
+</div>
+
+<!-- Features -->
+<section id="features">
+  <h2>Features</h2>
+  <div class="grid">
+    <div class="card">
+      <div class="icon">🔒</div>
+      <h3>Stateless Session</h3>
+      <p>セッションストアが不要。暗号化された Cookie だけでセッションを完結させます。</p>
+    </div>
+    <div class="card">
+      <div class="icon">🛡️</div>
+      <h3>CSRF Protection</h3>
+      <p>Double-Submit Cookie パターンにより CSRF 攻撃を防ぎます。SubmitHeader の検証で正規リクエストを識別します。</p>
+    </div>
+    <div class="card">
+      <div class="icon">🔑</div>
+      <h3>AES-GCM JWT</h3>
+      <p>標準 JWT を独自拡張した AES-GCM JWT により、ペイロードを暗号化・完全性検証します。</p>
+    </div>
+    <div class="card">
+      <div class="icon">🔄</div>
+      <h3>Auto Token Refresh</h3>
+      <p>SecretCookie の有効期限が切れても AccessCookie が有効であれば自動更新します。</p>
+    </div>
+    <div class="card">
+      <div class="icon">⚡</div>
+      <h3>Reverse Proxy</h3>
+      <p>既存のバックエンドの前段に置くだけで動作します。アプリ側の変更は最小限。</p>
+    </div>
+    <div class="card">
+      <div class="icon">📦</div>
+      <h3>Go Package</h3>
+      <p><code>pkg/</code> として公開されており、他のプロジェクトから直接インポートして利用できます。</p>
+    </div>
+  </div>
+</section>
+
+<!-- Architecture -->
+<section id="how-it-works">
+  <h2>How it works</h2>
+  <div class="arch">
+    <pre>
+  Browser                  Prism (Reverse Proxy)              Backend
+  ──────                   ─────────────────────              ───────
+
+  GET /page  ─────────────▶  verify SecretCookie  ──────────▶  handler
+                             inject secretPayload
+             ◀─────────────  set-cookie (if refresh) ◀────────  response
+
+  POST /api  ─────────────▶  verify SecretCookie   ──────────▶  handler
+  + <span class="hl">SubmitHeader</span>            verify AccessCookie              (sees accessPayload
+             ◀─────────────  inject accessPayload ◀────────────   → CSRF verified)
+                             update cookies (if changed)
+    </pre>
+  </div>
+
+  <br>
+  <h3 style="font-size:1.1rem; margin-bottom:1rem; color:var(--muted)">Token Format</h3>
+
+  <div class="token-format">
+    <pre><span class="label">SecretCookie</span>
+  <span class="enc">base64url(AES-GCM(</span>
+    base64url(json(JwtHeader)) <span class="plain">.</span> base64url(json(JwtClaims{ <span class="plain">secretPayload</span> }))
+  <span class="enc">))</span>
+
+<span class="label">AccessCookie</span>
+  <span class="enc">base64url(AES-GCM(</span>
+    base64url(json(JwtHeader)) <span class="plain">.</span> base64url(json(JwtClaims{ <span class="plain">accessPayload</span> }))
+  <span class="enc">))</span> <span class="plain">.</span> base64url(<span class="plain">publicPayload</span>)  ← AAD (tamper-evident, readable by client)</pre>
+  </div>
+
+  <br>
+  <h3 style="font-size:1.1rem; margin-bottom:1rem; color:var(--muted)">Payload 比較</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Payload</th>
+        <th>クライアントから読める</th>
+        <th>改ざん検知</th>
+        <th>用途例</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>secretPayload</code></td>
+        <td>✗ 暗号化</td>
+        <td>✓ AES-GCM</td>
+        <td>ユーザーID、権限</td>
+      </tr>
+      <tr>
+        <td><code>accessPayload</code></td>
+        <td>✗ 暗号化</td>
+        <td>✓ AES-GCM</td>
+        <td>セッション情報 (POST/PUT 時のみ送信)</td>
+      </tr>
+      <tr>
+        <td><code>publicPayload</code></td>
+        <td>✓ 平文 AAD</td>
+        <td>✓ AES-GCM AAD</td>
+        <td>表示用ユーザー名、テーマ設定</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- Quick Start -->
+<section id="quickstart">
+  <h2>Quick Start</h2>
+  <div class="code-block">
+    <pre><span class="comment"># 1. リポジトリのクローン</span>
+<span class="cmd">git clone</span> https://github.com/wsuzume/prism
+
+<span class="comment"># 2. サンプルアプリをビルド</span>
+<span class="cmd">make build</span>
+
+<span class="comment"># リリースモード（デバッグログを抑制）</span>
+<span class="cmd">MODE=release make build</span>
+
+<span class="comment"># 3. サンプルアプリを起動</span>
+<span class="cmd">make dev</span></pre>
+  </div>
+
+  <br>
+  <h3 style="font-size:1.1rem; margin-bottom:1rem; color:var(--muted)">Go パッケージとして利用</h3>
+  <div class="code-block">
+    <pre><span class="cmd">go get</span> github.com/wsuzume/prism</pre>
+  </div>
+
+  <br>
+  <h3 style="font-size:1.1rem; margin-bottom:1rem; color:var(--muted)">開発環境のセットアップ</h3>
+  <div class="code-block">
+    <pre><span class="comment"># Docker 開発イメージのビルド</span>
+<span class="cmd">make image</span>
+
+<span class="comment"># 開発シェルへ入る（カレントディレクトリを /work にマウント）</span>
+<span class="cmd">make shell</span>
+
+<span class="comment"># シェル内でビルド・フォーマット・テスト</span>
+<span class="cmd">make proxy</span>    <span class="comment"># プロダクション用リバースプロキシのビルド</span>
+<span class="cmd">make format</span>   <span class="comment"># コードのフォーマット</span>
+<span class="cmd">make test</span>     <span class="comment"># テストの実行</span></pre>
+  </div>
+</section>
+
+<!-- Project structure -->
+<section>
+  <h2>Project Structure</h2>
+  <div class="code-block">
+    <pre>prism/
+├── <span style="color:var(--accent)">pkg/</span>        公開パッケージ（他プロジェクトから利用可）
+│   ├── cipher/   AES-GCM 暗号化
+│   ├── jwt/      AES-GCM JWT
+│   ├── session/  Cookie セッション管理
+│   └── prism/    コアライブラリ
+├── prism/      プロダクション用リバースプロキシ
+├── dev/        開発環境ソースコード
+└── example/    サンプルアプリケーション</pre>
+  </div>
+</section>
+
+<footer>
+  <p>Prism &mdash; MIT License &mdash; <a href="https://github.com/wsuzume/prism">github.com/wsuzume/prism</a></p>
+</footer>
+
+</body>
+</html>
