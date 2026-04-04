@@ -5,27 +5,34 @@ import (
 	"strings"
 )
 
-// Hostヘッダから "hostname" 部分を取り出して小文字化。
-// 例: "api.example.com:8080" -> "api.example.com"
-func NormalizeHost(hostport string) string {
-	h := strings.TrimSpace(hostport)
-	if h == "" {
-		return ""
-	}
+// IsIPv4 はホスト名が IPv4 アドレスかどうかを返す。
+func IsIPv4(host string) bool {
+	ip := net.ParseIP(host)
+	return ip != nil && ip.To4() != nil
+}
 
-	// IPv6対応: [::1]:8080 など
-	if strings.HasPrefix(h, "[") {
-		if host, _, err := net.SplitHostPort(h); err == nil {
-			return strings.ToLower(host)
-		}
-		return strings.ToLower(strings.Trim(h, "[]"))
-	}
+// IsIPv6 はホスト名が IPv6 アドレスかどうかを返す。
+// ブラケット付き ("[::1]") も受け付ける。
+func IsIPv6(host string) bool {
+	h := strings.TrimPrefix(strings.TrimSuffix(strings.TrimSpace(host), "]"), "[")
+	ip := net.ParseIP(h)
+	return ip != nil && ip.To4() == nil
+}
 
-	// 通常の host:port
-	if host, _, err := net.SplitHostPort(h); err == nil {
-		return strings.ToLower(host)
+// SplitPort はホスト名(またはホスト:ポート文字列)からホストとポートを返す。
+// ポートがない場合、port は空文字列。
+func SplitPort(hostport string) (host, port string) {
+	h, p, err := net.SplitHostPort(strings.TrimSpace(hostport))
+	if err != nil {
+		return strings.TrimSpace(hostport), ""
 	}
-	return strings.ToLower(h)
+	return h, p
+}
+
+// NormalizeHost はポートなしのホスト名を小文字化して返す。
+// 例: "api.example.com" -> "api.example.com"
+func NormalizeHost(host string) string {
+	return strings.ToLower(strings.TrimSpace(host))
 }
 
 // baseDomain を基準に subdomain を取り出す。

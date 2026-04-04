@@ -88,6 +88,8 @@ func Run() {
 		log.Fatal(err)
 	}
 
+	fmt.Println(cfg.String())
+
 	// 例: example.com を基準に api.example.com / app.example.com を振り分ける
 	baseDomain := "wsuzu.me"
 	if cfg.ProxyConfig.BaseDomain != "" {
