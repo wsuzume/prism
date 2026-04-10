@@ -5,7 +5,7 @@ import (
 	"log"
 )
 
-func Run(configPath string) {
+func Run(configPath string, port string) {
 	verbose := true
 
 	////  Config の読み取り  ////
@@ -38,6 +38,13 @@ func Run(configPath string) {
 
 	if verbose {
 		fmt.Printf("loaded config from %q:\n%+v\n", path, cfg)
+	}
+
+	if port != "" {
+		if cfg.ProxyConfig == nil {
+			cfg.ProxyConfig = &ProxyConfig{}
+		}
+		cfg.ProxyConfig.Port = port
 	}
 
 	if err := cfg.Validate(); err != nil {
