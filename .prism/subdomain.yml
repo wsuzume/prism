@@ -1,0 +1,7 @@
+backends:
+  main:
+    default:
+      targets: ["http://172.18.0.20"]
+  echo:
+    default:
+      targets: ["http://172.18.0.30"]
