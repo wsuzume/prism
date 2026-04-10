@@ -1,0 +1,4 @@
+backends:
+  main:
+    default:
+      targets: ["http://172.18.0.20"]

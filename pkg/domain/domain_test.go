@@ -146,6 +146,88 @@ func TestNormalizeHost(t *testing.T) {
 	}
 }
 
+func TestParseDomain(t *testing.T) {
+	cases := []struct {
+		hostport   string
+		baseDomain string
+		route      string
+		want       DomainParts
+	}{
+		// コメント例そのまま
+		{
+			"example.com", "example.com", "",
+			DomainParts{Hostname: "", Tenant: "", BaseDomain: "example.com", Port: "", Route: ""},
+		},
+		{
+			"example.com", "example.com", "v1",
+			DomainParts{Hostname: "", Tenant: "", BaseDomain: "example.com", Port: "", Route: "v1"},
+		},
+		{
+			"api.example.com", "example.com", "",
+			DomainParts{Hostname: "", Tenant: "api", BaseDomain: "example.com", Port: "", Route: ""},
+		},
+		{
+			"api.example.com", "example.com", "v1",
+			DomainParts{Hostname: "", Tenant: "api", BaseDomain: "example.com", Port: "", Route: "v1"},
+		},
+		{
+			"api.tenant1.example.com", "example.com", "",
+			DomainParts{Hostname: "api", Tenant: "tenant1", BaseDomain: "example.com", Port: "", Route: ""},
+		},
+		{
+			"api.tenant1.example.com", "example.com", "v1",
+			DomainParts{Hostname: "api", Tenant: "tenant1", BaseDomain: "example.com", Port: "", Route: "v1"},
+		},
+		{
+			"userA.api.tenant1.example.com", "example.com", "",
+			DomainParts{Hostname: "usera.api", Tenant: "tenant1", BaseDomain: "example.com", Port: "", Route: ""},
+		},
+		{
+			"userA.api.tenant1.example.com", "example.com", "v1",
+			DomainParts{Hostname: "usera.api", Tenant: "tenant1", BaseDomain: "example.com", Port: "", Route: "v1"},
+		},
+		// ポート番号あり
+		{
+			"api.tenant1.example.com:8080", "example.com", "v1",
+			DomainParts{Hostname: "api", Tenant: "tenant1", BaseDomain: "example.com", Port: "8080", Route: "v1"},
+		},
+		// 大文字混在
+		{
+			"API.Tenant1.Example.Com", "example.com", "",
+			DomainParts{Hostname: "api", Tenant: "tenant1", BaseDomain: "example.com", Port: "", Route: ""},
+		},
+		// IP アドレス（hostname/tenant は空）
+		{
+			"192.168.1.1", "example.com", "v1",
+			DomainParts{Hostname: "", Tenant: "", BaseDomain: "example.com", Port: "", Route: "v1"},
+		},
+		{
+			"192.168.1.1:8080", "example.com", "",
+			DomainParts{Hostname: "", Tenant: "", BaseDomain: "example.com", Port: "8080", Route: ""},
+		},
+		// 想定外ドメイン（hostname/tenant は空）
+		{
+			"other.com", "example.com", "",
+			DomainParts{Hostname: "", Tenant: "", BaseDomain: "example.com", Port: "", Route: ""},
+		},
+		// baseDomain が空
+		{
+			"api.example.com", "", "",
+			DomainParts{Hostname: "", Tenant: "", BaseDomain: "", Port: "", Route: ""},
+		},
+	}
+	for _, c := range cases {
+		name := c.hostport + "|" + c.baseDomain + "|" + c.route
+		t.Run(name, func(t *testing.T) {
+			got := ParseDomain(c.hostport, c.baseDomain, c.route)
+			if got != c.want {
+				t.Errorf("ParseDomain(%q, %q, %q) = %+v, want %+v",
+					c.hostport, c.baseDomain, c.route, got, c.want)
+			}
+		})
+	}
+}
+
 func TestExtractSubdomain(t *testing.T) {
 	cases := []struct {
 		host       string

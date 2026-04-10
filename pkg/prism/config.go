@@ -12,8 +12,42 @@ import (
 	"github.com/wsuzume/prism/pkg/domain"
 )
 
+// 仕様：
+// - BaseDomain の指定がない場合はサブドメインによる振り分けができないため、警告を表示して main のみをルーティングする。
+
 type ProxyConfig struct {
-	BaseDomain string `yaml:"base_domain,omitempty"`
+	BaseDomain   string `yaml:"base_domain,omitempty"`   // ルーティングの基準となるドメイン。例: "example.com"。
+	MainTenant   string `yaml:"main_tenant,omitempty"`   // サブドメインが与えられなかった場合を意味するキー。デフォルト値は main である。
+	DefaultRoute string `yaml:"default_route,omitempty"` // 合致するルートがない場合を意味するキー。デフォルト値は default である。
+	Port         string `yaml:"port,omitempty"`          // リッスンするポート番号。デフォルト値は 8080 である。
+}
+
+func (p *ProxyConfig) IsMainTenant(host string) bool {
+	if p == nil || p.MainTenant == "" {
+		return host == "" || host == "main"
+	}
+	return host == "" || host == p.MainTenant
+}
+
+func (p *ProxyConfig) IsDefaultRoute(route string) bool {
+	if p == nil || p.DefaultRoute == "" {
+		return route == "" || route == "default"
+	}
+	return route == "" || route == p.DefaultRoute
+}
+
+func (p *ProxyConfig) NormalizeTenant(host string) string {
+	if p.IsMainTenant(host) {
+		return ""
+	}
+	return host
+}
+
+func (p *ProxyConfig) NormalizeRoute(route string) string {
+	if p.IsDefaultRoute(route) {
+		return ""
+	}
+	return route
 }
 
 type CookieConfig struct {
@@ -22,14 +56,29 @@ type CookieConfig struct {
 }
 
 type BackendConfig struct {
-	TargetURL string `yaml:"target_url"`
-	Hostname  string `yaml:"hostname,omitempty"`
+	Targets  []string `yaml:"targets"`
+	Hostname string   `yaml:"hostname,omitempty"`
+}
+
+func (b *BackendConfig) NormalizeTargets() []string {
+	normalized := make([]string, len(b.Targets))
+	for i, target := range b.Targets {
+		normalized[i] = domain.NormalizeHost(target)
+	}
+	return normalized
+}
+
+func (b *BackendConfig) Normalize() *BackendConfig {
+	return &BackendConfig{
+		Targets:  b.NormalizeTargets(),
+		Hostname: b.Hostname,
+	}
 }
 
 type PrismConfig struct {
-	ProxyConfig  ProxyConfig              `yaml:"proxy_config,omitempty"`
-	CookieConfig CookieConfig             `yaml:"cookie_config,omitempty"`
-	Backends     map[string]BackendConfig `yaml:"backends,omitempty"`
+	ProxyConfig  *ProxyConfig                         `yaml:"proxy_config,omitempty"`
+	CookieConfig *CookieConfig                        `yaml:"cookie_config,omitempty"`
+	Backends     map[string]map[string]*BackendConfig `yaml:"backends,omitempty"`
 }
 
 func (c *PrismConfig) String() string {
@@ -41,24 +90,73 @@ func (c *PrismConfig) String() string {
 	return string(b)
 }
 
-func (c *PrismConfig) NormalizedBackends() map[string]string {
-	if c.Backends == nil {
+func (c *PrismConfig) IsProxyConfigEmpty() bool {
+	return c.ProxyConfig == nil
+}
+
+func (c *PrismConfig) IsBaseDomainEmpty() bool {
+	return c.ProxyConfig == nil || c.ProxyConfig.BaseDomain == ""
+}
+
+func (c *PrismConfig) IsCookieConfigEmpty() bool {
+	return c.CookieConfig == nil
+}
+
+func (c *PrismConfig) IsBackendsEmpty() bool {
+	return c.Backends == nil || len(c.Backends) == 0
+}
+
+func (c *PrismConfig) Validate() error {
+	if c.IsBackendsEmpty() {
+		// バックエンドが空の場合はエコーモードで起動するためエラーではない
 		return nil
 	}
 
-	bs := make(map[string]string, len(c.Backends))
-	for k, b := range c.Backends {
-		key := k
-		if b.Hostname != "" {
-			key = b.Hostname
+	for host, routes := range c.Backends {
+		for route, cfg := range routes {
+			if len(cfg.Targets) == 0 {
+				return fmt.Errorf("backend %q route %q: target is required", host, route)
+			}
+			// if !strings.HasPrefix(cfg.Target, "http://") && !strings.HasPrefix(cfg.Target, "https://") {
+			// 	return fmt.Errorf("backend %q route %q: target must start with http:// or https://", host, route)
+			// }
 		}
-		if k == "default" {
-			key = "" // default は空文字ホスト名にマッピング
-		}
-		bs[key] = domain.NormalizeHost(b.TargetURL)
 	}
 
+	return nil
+}
+
+func (c *PrismConfig) NormalizeBackends() map[string]map[string]*BackendConfig {
+	if c.IsBackendsEmpty() {
+		return nil
+	}
+
+	bs := make(map[string]map[string]*BackendConfig, len(c.Backends))
+	for tenant, routes := range c.Backends {
+		t := c.ProxyConfig.NormalizeTenant(tenant)
+		bs[t] = make(map[string]*BackendConfig, len(routes))
+		for route, backend := range routes {
+			r := c.ProxyConfig.NormalizeRoute(route)
+			bs[t][r] = backend.Normalize()
+		}
+	}
 	return bs
+}
+
+func (c *PrismConfig) Normalize() *PrismConfig {
+	return &PrismConfig{
+		ProxyConfig:  c.ProxyConfig,  // ProxyConfig は正規化不要
+		CookieConfig: c.CookieConfig, // CookieConfig は正規化不要
+		Backends:     c.NormalizeBackends(),
+	}
+}
+
+func EmptyConfig() *PrismConfig {
+	return &PrismConfig{
+		ProxyConfig:  nil,
+		CookieConfig: nil,
+		Backends:     nil,
+	}
 }
 
 func LoadConfig(path string) (*PrismConfig, error) {
