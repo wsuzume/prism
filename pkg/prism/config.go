@@ -55,6 +55,10 @@ type CookieConfig struct {
 	Secure bool   `yaml:"secure,omitempty"`
 }
 
+func (c *CookieConfig) IsValid() bool {
+	return c != nil && c.Domain != ""
+}
+
 type BackendConfig struct {
 	Targets  []string `yaml:"targets"`
 	Hostname string   `yaml:"hostname,omitempty"`

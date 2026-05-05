@@ -30,13 +30,7 @@ func NewSessionManager(iss string, aud string) *SessionManager {
 	}
 }
 
-func (sm *SessionManager) NewSecretJwt(s cipher.Algorithm, payload json.RawMessage) (*jwt.Jwt, error) {
-	jti, err := uuid.NewV7()
-	if err != nil {
-		return nil, err
-	}
-	now := time.Now().Unix()
-
+func (sm *SessionManager) NewSecretJwt(s cipher.Algorithm, jti uuid.UUID, now time.Time, payload json.RawMessage) *jwt.Jwt {
 	header := &jwt.JwtHeader{
 		Alg: s.Alg(),
 		Cty: "JSON",
@@ -55,16 +49,10 @@ func (sm *SessionManager) NewSecretJwt(s cipher.Algorithm, payload json.RawMessa
 	return &jwt.Jwt{
 		Header: header,
 		Claims: claims,
-	}, nil
+	}
 }
 
-func (sm *SessionManager) NewAccessJwt(s cipher.Algorithm, payload json.RawMessage) (*jwt.Jwt, error) {
-	jti, err := uuid.NewV7()
-	if err != nil {
-		return nil, err
-	}
-	now := time.Now().Unix()
-
+func (sm *SessionManager) NewAccessJwt(s cipher.Algorithm, jti uuid.UUID, now time.Time, payload json.RawMessage) *jwt.Jwt {
 	header := &jwt.JwtHeader{
 		Alg: s.Alg(),
 		Cty: "JSON",
@@ -74,7 +62,7 @@ func (sm *SessionManager) NewAccessJwt(s cipher.Algorithm, payload json.RawMessa
 		Iss: sm.Iss,
 		Sub: "access",
 		Aud: sm.Aud,
-		Exp: now + int64(sm.RefreshTTL.Seconds()),
+		Exp: now + int64(sm.SessionTTL.Seconds()),
 		Nbf: now,
 		Iat: now,
 		Jti: jti.String(),
@@ -83,14 +71,11 @@ func (sm *SessionManager) NewAccessJwt(s cipher.Algorithm, payload json.RawMessa
 	return &jwt.Jwt{
 		Header: header,
 		Claims: claims,
-	}, nil
+	}
 }
 
-func (sm *SessionManager) NewSignedSecretToken(s cipher.Signer, secretPayload json.RawMessage) (string, error) {
-	j, err := sm.NewSecretJwt(s, secretPayload)
-	if err != nil {
-		return "", err
-	}
+func (sm *SessionManager) NewSignedSecretToken(s cipher.Signer, jti uuid.UUID, now time.Time, secretPayload json.RawMessage) (string, error) {
+	j := sm.NewSecretJwt(s, jti, now, secretPayload)
 
 	return jwt.Sign(s, j)
 }
@@ -98,11 +83,8 @@ func (sm *SessionManager) NewSignedSecretToken(s cipher.Signer, secretPayload js
 // NewSignedAccessToken は署名付きアクセストークンを生成する。
 // publicPayload は署名対象に含まれない。サーバー側はこの値を信頼せず、
 // クライアントへの情報伝達のみに使用する。
-func (sm *SessionManager) NewSignedAccessToken(s cipher.Signer, accessPayload, publicPayload json.RawMessage) (string, error) {
-	j, err := sm.NewAccessJwt(s, accessPayload)
-	if err != nil {
-		return "", err
-	}
+func (sm *SessionManager) NewSignedAccessToken(s cipher.Signer, jti uuid.UUID, now time.Time, accessPayload, publicPayload json.RawMessage) (string, error) {
+	j := sm.NewAccessJwt(s, jti, now, accessPayload)
 
 	token, err := jwt.Sign(s, j)
 	if err != nil {
@@ -164,20 +146,14 @@ func (sm *SessionManager) VerifySignedAccessToken(s cipher.Signer, token string)
 	return j, pub, nil
 }
 
-func (sm *SessionManager) EncryptSecretToken(e cipher.Encrypter, secretPayload json.RawMessage) (string, error) {
-	j, err := sm.NewSecretJwt(e, secretPayload)
-	if err != nil {
-		return "", err
-	}
+func (sm *SessionManager) EncryptSecretToken(e cipher.Encrypter, jti uuid.UUID, now time.Time, secretPayload json.RawMessage) (string, error) {
+	j := sm.NewSecretJwt(e, jti, now, secretPayload)
 
 	return jwt.Encrypt(e, j)
 }
 
-func (sm *SessionManager) EncryptAccessToken(e cipher.EncrypterAAD, accessPayload, publicPayload json.RawMessage) (string, error) {
-	j, err := sm.NewAccessJwt(e, accessPayload)
-	if err != nil {
-		return "", err
-	}
+func (sm *SessionManager) EncryptAccessToken(e cipher.EncrypterAAD, jti uuid.UUID, now time.Time, accessPayload, publicPayload json.RawMessage) (string, error) {
+	j := sm.NewAccessJwt(e, jti, now, accessPayload)
 
 	encrypted, err := jwt.EncryptWithAAD(e, j, publicPayload)
 	if err != nil {
@@ -188,6 +164,7 @@ func (sm *SessionManager) EncryptAccessToken(e cipher.EncrypterAAD, accessPayloa
 
 	return pub + "." + encrypted, nil
 }
+
 func (sm *SessionManager) DecryptSecretToken(e cipher.Encrypter, token string) (*jwt.Jwt, error) {
 	const maxTokenLen = 4096
 	if token == "" || len(token) > maxTokenLen {

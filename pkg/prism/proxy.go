@@ -8,6 +8,9 @@ import (
 	"net/url"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/wsuzume/prism/pkg/cipher"
+	"github.com/wsuzume/prism/pkg/session"
 )
 
 // buildProxy は target URL に転送する ReverseProxy を組み立てる。
@@ -104,6 +107,22 @@ func RunReverseProxyServer(cfg *PrismConfig) {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(headerLogMiddleware())
+
+	if cfg.CookieConfig.IsValid() {
+		log.Printf("cookie config: domain=%q secure=%v", cfg.CookieConfig.Domain, cfg.CookieConfig.Secure)
+
+		sm := session.NewSessionManager("PRISM", "FLITLEAP")
+		// TODO: 鍵ファイルから読み込むようにする
+		dummyKey := []byte("0123456789abcdef0123456789abcdef") // 32 bytes = AES-256
+		e, err := cipher.NewEncrypterAESGCM(dummyKey)
+		if err != nil {
+			log.Fatal(err)
+		}
+		p := session.DefaultCookieSession(sm, e, cfg.CookieConfig.Domain, cfg.CookieConfig.Secure)
+
+		r.Use(p.Middleware())
+	}
+
 	r.Use(tenantMiddleware(baseDomain))
 
 	r.NoRoute(func(c *gin.Context) {
