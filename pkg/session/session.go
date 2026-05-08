@@ -360,7 +360,7 @@ func (s *CookieSession) handleUntrustedRequest(c *gin.Context) {
 	newAccess, errA := s.NewAccessJwt(jti, now, accessPayloadJson, publicPayloadJson)
 	if errS != nil || errA != nil {
 		log.Printf("Failed to generate new tokens for session: %v, %v", errS, errA)
-		// error
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
@@ -396,6 +396,7 @@ func (s *CookieSession) handleUntrustedRequestAutoRefresh(c *gin.Context, secret
 	
 	// ファイアウォールが無効か、安全なエンドポイントの場合は、
 	// 有効なシークレットトークンからアクセストークンの再発行を試みる
+	// TODO: 有効期限を確認して更新する
 	now := secretJwt.Claims.Iat
 	jti := secretJwt.Claims.Jti
 
@@ -422,7 +423,7 @@ func (s *CookieSession) handleUntrustedRequestAutoRefresh(c *gin.Context, secret
 	newAccess, errA := s.NewAccessJwt(jtiUUID, time.Unix(now, 0), accessPayloadJson, publicPayloadJson)
 	if errA != nil {
 		log.Printf("Failed to generate new tokens for session: %v", errA)
-		// error
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
@@ -594,8 +595,9 @@ func (s *CookieSession) ModifyResponse(orig func(*http.Response) error) func(*ht
 			accessPayloadJson, errA := json.Marshal(accessPayload)
 			publicPayloadJson, errP := json.Marshal(publicPayload)
 			if errA != nil || errP != nil {
-				log.Printf("Failed to marshal payloads for response modification: %v, %v", errA, errP)
-				return nil // error
+				marshalErr := errors.Join(errA, errP)
+ 				log.Printf("Failed to marshal payloads for response modification: %v", marshalErr)
+ 				return marshalErr
 			}
 
 			secretToken, errS := s.NewSecretJwt(jti, now, []byte(secretPayloadJson))

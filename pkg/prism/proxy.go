@@ -121,6 +121,7 @@ func RunReverseProxyServer(cfg *PrismConfig) {
 		p := session.DefaultCookieSession(sm, e, cfg.CookieConfig.Domain, cfg.CookieConfig.Secure)
 
 		r.Use(p.Middleware())
+		// TODO: 対になる ModifyResponse をセットする
 	}
 
 	r.Use(tenantMiddleware(baseDomain))
