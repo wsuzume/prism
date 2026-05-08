@@ -52,6 +52,7 @@ type NotifyPayload struct {
 }
 
 func BuildNotifyPayload(secret *SecretPayload) *NotifyPayload {
+	// TODO: CSRFProtected を指定可能にする
 	return &NotifyPayload{
 		Authorized: secret.Authorized,
 		Authenticated: secret.Authenticated,
