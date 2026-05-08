@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -57,6 +58,13 @@ import (
 //     - どちらも有効である場合は、アクセストークンとサブミットトークンの一致も確認する
 //   - Firewall オプションに応じて、アクセスを許可するかどうか判断する
 //     - Firewall が拒否した場合でも、APIキーを許可する設定でAPIキーが有効であればアクセスを許可する
+
+type pendingCookiesKey struct{}
+
+type pendingCookies struct {
+	SecretToken string // 空の場合はセットしない
+	AccessToken string // 空の場合はセットしない
+}
 
 const (
 	// tokens
@@ -140,12 +148,12 @@ func DefaultCookieSession(sm *SessionManager, encrypter cipher.EncrypterAAD, dom
 	}
 }
 
-func (s *CookieSession) EncryptSecretToken(jti uuid.UUID, secretPayload json.RawMessage) (string, error) {
-	return s.Manager.EncryptSecretToken(s.Encrypter, jti, secretPayload)
+func (s *CookieSession) EncryptSecretToken(jti uuid.UUID, now time.Time, secretPayload json.RawMessage) (string, error) {
+	return s.Manager.EncryptSecretToken(s.Encrypter, jti, now, secretPayload)
 }
 
-func (s *CookieSession) EncryptAccessToken(jti uuid.UUID, accessPayload, publicPayload json.RawMessage) (string, error) {
-	return s.Manager.EncryptAccessToken(s.Encrypter, jti, accessPayload, publicPayload)
+func (s *CookieSession) EncryptAccessToken(jti uuid.UUID, now time.Time, accessPayload, publicPayload json.RawMessage) (string, error) {
+	return s.Manager.EncryptAccessToken(s.Encrypter, jti, now, accessPayload, publicPayload)
 }
 
 func (s *CookieSession) DecryptSecretToken(secretCookie string) (*jwt.Jwt, error) {
@@ -198,15 +206,15 @@ func (s *CookieSession) ValidateAccessToken(req *http.Request, secretJwt *jwt.Jw
 	return access, jwt, nil
 }
 
-func (s *CookieSession) ValidateSubmitToken(req *http.Request, accessToken string) (string, error) {
-	submit, hasSubmit := req.Header.Get(s.SubmitTokenName)
-	if !hasSubmit {
-		return "", errors.New("submit token not found in headers")
+func (s *CookieSession) ValidateSubmitToken(req *http.Request, accessToken string) (string, error, error) {
+	submit := req.Header.Get(s.SubmitTokenName)
+	if submit == "" {
+		return "", errors.New("submit token not found in headers"), nil
 	}
 	if subtle.ConstantTimeCompare([]byte(submit), []byte(accessToken)) != 1 {
-		return "", errors.New("submit token does not match access token")
+		return "", nil, errors.New("submit token does not match access token")
 	}
-	return submit, nil
+	return submit, nil, nil
 }
 
 func (s *CookieSession) NewSecretJwt(jti uuid.UUID, now time.Time, secretPayload json.RawMessage) (string, error) {
@@ -215,8 +223,7 @@ func (s *CookieSession) NewSecretJwt(jti uuid.UUID, now time.Time, secretPayload
 }
 
 func (s *CookieSession) NewAccessJwt(jti uuid.UUID, now time.Time, accessPayload, publicPayload json.RawMessage) (string, error) {
-	accessJwt := s.Manager.NewAccessJwt(s.Encrypter, jti, now, accessPayload, publicPayload)
-	return jwt.Encrypt(s.Encrypter, accessJwt)
+	return s.Manager.EncryptAccessToken(s.Encrypter, jti, now, accessPayload, publicPayload)
 }
 
 func (s *CookieSession) SetSecretCookie(c *gin.Context, value string) {
@@ -357,9 +364,12 @@ func (s *CookieSession) handleUntrustedRequest(c *gin.Context) {
 		return
 	}
 
-	// クッキーにセットする
-	s.SetSecretCookie(c, newSecret)
-	s.SetAccessCookie(c, newAccess)
+	// ModifyResponse でクッキーをセットするためにコンテキストへ渡す
+	ctx := context.WithValue(c.Request.Context(), pendingCookiesKey{}, &pendingCookies{
+		SecretToken: newSecret,
+		AccessToken: newAccess,
+	})
+	c.Request = c.Request.WithContext(ctx)
 
 	// レスポンスヘッダにペイロードをセットする
 	c.Request.Header.Set(s.SecretHeaderName, string(secretPayloadJson))
@@ -403,15 +413,24 @@ func (s *CookieSession) handleUntrustedRequestAutoRefresh(c *gin.Context, secret
 		return
 	}
 
-	newAccess, errA := s.NewAccessJwt(jti, now, accessPayloadJson, publicPayloadJson)
-	if errS != nil || errA != nil {
-		log.Printf("Failed to generate new tokens for session: %v, %v", errS, errA)
+	jtiUUID, errJ := uuid.Parse(jti)
+	if errJ != nil {
+		log.Printf("Failed to parse jti as UUID: %v", errJ)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	newAccess, errA := s.NewAccessJwt(jtiUUID, time.Unix(now, 0), accessPayloadJson, publicPayloadJson)
+	if errA != nil {
+		log.Printf("Failed to generate new tokens for session: %v", errA)
 		// error
 		return
 	}
 
-	// クッキーにセットする
-	s.SetAccessCookie(c, newAccess)
+	// ModifyResponse でクッキーをセットするためにコンテキストへ渡す
+	ctx := context.WithValue(c.Request.Context(), pendingCookiesKey{}, &pendingCookies{
+		AccessToken: newAccess,
+	})
+	c.Request = c.Request.WithContext(ctx)
 
 	// レスポンスヘッダにペイロードをセットする
 	c.Request.Header.Set(s.SecretHeaderName, string(secretPayloadJson))
@@ -497,14 +516,14 @@ func (s *CookieSession) Middleware() gin.HandlerFunc {
 		//  3. サブミットトークンが存在して、アクセストークンと一致すること
 
 		// Cookie を読み取る
-		secret, secretJwt, secretPayload, errSecret := s.ValidateSecretToken(c.Request)
+		_, secretJwt, secretPayload, errSecret := s.ValidateSecretToken(c.Request)
 		if errSecret != nil {
 			// シークレットトークンが無効である場合は、シークレットトークンとアクセストークンを再発行する
 			s.handleUntrustedRequest(c)
 			return
 		}
 		
-		access, accessJwt, errAccess := s.ValidateAccessToken(c.Request, secretJwt)
+		access, _, errAccess := s.ValidateAccessToken(c.Request, secretJwt)
 		if errAccess != nil {
 			// シークレットトークンが有効で、アクセストークンが不正である場合は、AutoRefresh オプションに応じてアクセストークンを再発行する
 			if !s.AutoRefresh {
@@ -518,7 +537,7 @@ func (s *CookieSession) Middleware() gin.HandlerFunc {
 			}
 		}
 		
-		submit, errSubmit := s.ValidateSubmitToken(c.Request, access)
+		_, errSubmit, errCompare := s.ValidateSubmitToken(c.Request, access)
 		// どちらも有効であり、サブミットトークンが存在しない場合は安全なエンドポイントへのアクセスのみ許可する
 		if errSubmit != nil {
 			s.handleUntrustedRequestPassThrough(c, secretPayload)
@@ -526,7 +545,7 @@ func (s *CookieSession) Middleware() gin.HandlerFunc {
 		}
 
 		// どちらも有効であり、サブミットトークンが存在する場合は、アクセストークンとの一致も確認する
-		if subtle.ConstantTimeCompare([]byte(access), []byte(submit)) != 1 {
+		if errCompare != nil {
 			// サブミットトークンがアクセストークンと一致しない場合は、CSRF攻撃の可能性があるため、アクセスを拒否する
 			c.AbortWithStatus(http.StatusForbidden)
 			return
@@ -540,45 +559,91 @@ func (s *CookieSession) Middleware() gin.HandlerFunc {
 
 func (s *CookieSession) ModifyResponse(orig func(*http.Response) error) func(*http.Response) error {
 	return func(resp *http.Response) error {
+		// TODO: ログアウト機能の実装
+
 		if orig != nil {
 			if err := orig(resp); err != nil {
 				return err
 			}
 		}
 
+		// ペイロードヘッダを読み取ってから削除する（クライアントには返さない）
 		secretPayloadJson := resp.Header.Get(s.SecretHeaderName)
-		if secretPayloadJson == "" {
-			// ヘッダにペイロードがない場合は何もしない
-			return nil
-		}
-
-		// レスポンスヘッダからペイロードを削除（消し忘れがないよう読み取ったらすぐに削除）
 		resp.Header.Del(s.SecretHeaderName)
 		resp.Header.Del(s.AccessHeaderName)
 		resp.Header.Del(s.PublicHeaderName)
 		resp.Header.Del(s.NotifyHeaderName)
 
-		// レスポンスから Cookie にセットしたい内容を取得する（JSON形式を想定）
-		secretPayload := SecretPayloadFromJson([]byte(secretPayloadJson))
-		accessPayload := BuildAccessPayload(secretPayload)
-		publicPayload := BuildPublicPayload(secretPayload)
+		if secretPayloadJson != "" {
+			now := time.Now()
+			jti, err := uuid.NewV7()
+			if err != nil {
+				log.Printf("Failed to generate new UUID for session: %v", err)
+				return err
+			}
 
-		accessPayloadJson, errA := json.Marshal(accessPayload)
-		publicPayloadJson, errP := json.Marshal(publicPayload)
-		if errA != nil || errP != nil {
-			log.Printf("Failed to marshal payloads for response modification: %v, %v", errA, errP)
-			return nil // error
+			// バックエンド（ログイン認証サーバー）からのレスポンスを優先してクッキーを発行する
+			secretPayload, err := SecretPayloadFromJson([]byte(secretPayloadJson))
+			if err != nil {
+				log.Printf("Failed to parse secret payload: %v", err)
+				return err
+			}
+			accessPayload := BuildAccessPayload(secretPayload)
+			publicPayload := BuildPublicPayload(secretPayload)
+
+			accessPayloadJson, errA := json.Marshal(accessPayload)
+			publicPayloadJson, errP := json.Marshal(publicPayload)
+			if errA != nil || errP != nil {
+				log.Printf("Failed to marshal payloads for response modification: %v, %v", errA, errP)
+				return nil // error
+			}
+
+			secretToken, errS := s.NewSecretJwt(jti, now, []byte(secretPayloadJson))
+			accessToken, errA := s.NewAccessJwt(jti, now, accessPayloadJson, publicPayloadJson)
+			if errS != nil {
+				log.Printf("Failed to generate new secret JWT: %v", errS)
+				return errS
+			}
+			if errA != nil {
+				log.Printf("Failed to generate new access JWT: %v", errA)
+				return errA
+			}
+
+			secretCookie := s.newSecretCookie(secretToken).String()
+			accessCookie := s.newAccessCookie(accessToken).String()
+
+			resp.Header.Add("Set-Cookie", secretCookie)
+			resp.Header.Add("Set-Cookie", accessCookie)
+
+			if mode.Debug {
+				log.Printf("SecretCookie: %s\n", secretCookie)
+				log.Printf("AccessCookie: %s\n", accessCookie)
+				log.Printf("accessPayloadJson: %s\n", accessPayloadJson)
+				log.Printf("publicPayloadJson: %s\n", publicPayloadJson)
+			}
+
+			return nil
 		}
 
-		secretCookie := s.newSecretCookie("SecretNotLoggedIn").String()
-		accessCookie := s.newAccessCookie("AccessNotLoggedIn").String()
+		// バックエンドからの指示がない場合は、Middleware がコンテキストに詰めたトークンでクッキーを発行する
+		pending, ok := resp.Request.Context().Value(pendingCookiesKey{}).(*pendingCookies)
+		if !ok || pending == nil {
+			return nil
+		}
 
-		resp.Header.Add("Set-Cookie", secretCookie)
-		resp.Header.Add("Set-Cookie", accessCookie)
-
-		if mode.Debug {
-			log.Printf("SecretCookie: %s\n", secretCookie)
-			log.Printf("AccessCookie: %s\n", accessCookie)
+		if pending.SecretToken != "" {
+			secretCookie := s.newSecretCookie(pending.SecretToken).String()
+			resp.Header.Add("Set-Cookie", secretCookie)
+			if mode.Debug {
+				log.Printf("SecretCookie: %s\n", secretCookie)
+			}
+		}
+		if pending.AccessToken != "" {
+			accessCookie := s.newAccessCookie(pending.AccessToken).String()
+			resp.Header.Add("Set-Cookie", accessCookie)
+			if mode.Debug {
+				log.Printf("AccessCookie: %s\n", accessCookie)
+			}
 		}
 
 		return nil

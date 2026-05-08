@@ -1,5 +1,7 @@
 package session
 
+import "encoding/json"
+
 // PRISM-SECRET response structure
 type SecretPayload struct {
 	Authorized    bool   `json:"authorized"`     // 認可が正常に行われたか

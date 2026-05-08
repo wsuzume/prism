@@ -1,0 +1,40 @@
+services:
+  prism:
+    image: prism:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: prism
+    networks:
+      prism-network:
+        ipv4_address: 172.18.0.10
+    ports:
+      - "8080:8080"
+      # - "443:443"
+    volumes:
+      # - ./.prism/hello.yml:/app/config.yml:ro
+      - ./.prism/simple.yml:/app/config.yml:ro
+      # - ./.prism/example.yml:/app/config.yml:ro
+
+  backend1:
+    image: nginx:alpine
+    container_name: backend1
+    networks:
+      prism-network:
+        ipv4_address: 172.18.0.20
+
+  backend2:
+    image: joshnobus/echo:latest
+    container_name: backend2
+    networks:
+      prism-network:
+        ipv4_address: 172.18.0.30
+
+networks:
+  prism-network:
+    name: prism-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.18.0.0/24
+          gateway: 172.18.0.1

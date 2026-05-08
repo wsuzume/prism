@@ -21,6 +21,21 @@ var configCmd = &cobra.Command{
 			}
 		}
 
+		if path == "" {
+			fmt.Println("no config file found")
+			fmt.Println()
+			fmt.Println("specify a config file with the -f flag:")
+			fmt.Println("  prism -f /path/to/config.yml config")
+			fmt.Println()
+			fmt.Println("or place a config file in one of the following locations (highest priority first):")
+			for _, p := range prism.GetConfigPriorityList() {
+				fmt.Printf("  %s\n", p)
+			}
+			fmt.Println()
+			fmt.Println("run 'prism generate' to output a config template.")
+			return
+		}
+
 		config, _ := prism.LoadConfig(path)
 
 		fmt.Println(config.String())
