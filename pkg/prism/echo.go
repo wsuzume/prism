@@ -40,6 +40,8 @@ func RunEchoServer(cfg *PrismConfig) {
 
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(headerLogMiddleware())
+	r.Use(originLogMiddleware())
 
 	r.Any("/*path", echoHandler)
 

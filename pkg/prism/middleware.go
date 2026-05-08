@@ -2,6 +2,7 @@ package prism
 
 import (
 	"log"
+	"net/url"
 
 	"github.com/gin-gonic/gin"
 
@@ -24,6 +25,22 @@ func headerLogMiddleware() gin.HandlerFunc {
 			log.Printf("[HDR] %s: %v", k, v)
 		}
 
+		c.Next()
+	}
+}
+
+func originLogMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if origin := c.Request.Header.Get("Origin"); origin != "" {
+			log.Printf("[ORI] source=origin origin=%s", origin)
+		} else if referer := c.Request.Header.Get("Referer"); referer != "" {
+			u, err := url.Parse(referer)
+			if err == nil {
+				log.Printf("[ORI] source=referer origin=%s://%s", u.Scheme, u.Host)
+			}
+		} else {
+			log.Printf("[ORI] source=none origin=")
+		}
 		c.Next()
 	}
 }

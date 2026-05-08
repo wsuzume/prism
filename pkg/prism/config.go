@@ -55,6 +55,10 @@ type CookieConfig struct {
 	Secure bool   `yaml:"secure,omitempty"`
 }
 
+func (c *CookieConfig) IsValid() bool {
+	return c != nil && c.Domain != ""
+}
+
 type BackendConfig struct {
 	Targets  []string `yaml:"targets"`
 	Hostname string   `yaml:"hostname,omitempty"`
@@ -172,12 +176,15 @@ func LoadConfig(path string) (*PrismConfig, error) {
 	return &cfg, nil
 }
 
+// GetConfigPriorityList は設定ファイルの探索順リストを返す。
+func GetConfigPriorityList() []string {
+	return append([]string(nil), configPriorityList...)
+}
+
 var configPriorityList = []string{
 	"./config.yml",
 	"./config.yaml",
 	"./.prism/config.yml",
-	"./.prism/config.yml",
-	"~/.prism/config.yml",
 	"~/.prism/config.yaml",
 	"~/.config/prism/config.yml",
 	"~/.config/prism/config.yaml",
