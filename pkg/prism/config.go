@@ -51,8 +51,9 @@ func (p *ProxyConfig) NormalizeRoute(route string) string {
 }
 
 type CookieConfig struct {
-	Domain string `yaml:"domain,omitempty"`
-	Secure bool   `yaml:"secure,omitempty"`
+	Domain        string `yaml:"domain,omitempty"`
+	Secure        bool   `yaml:"secure,omitempty"`
+	CryptoKeyPath string `yaml:"crypto_key_path,omitempty"`
 }
 
 func (c *CookieConfig) IsValid() bool {
