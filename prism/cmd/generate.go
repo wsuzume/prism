@@ -22,7 +22,7 @@ var generateCmd = &cobra.Command{
 				Port:         "8080",
 			},
 			CookieConfig: &prism.CookieConfig{
-				Domain: "example.com",
+				Domain: ".example.com",
 				Secure: true,
 			},
 			Backends: map[string]map[string]*prism.BackendConfig{

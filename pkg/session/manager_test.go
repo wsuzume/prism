@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/wsuzume/prism/pkg/cipher"
 )
 
@@ -14,6 +16,15 @@ func newTestManager() *SessionManager {
 }
 
 var testPayload = json.RawMessage(`{"user_id":"u-123","role":"admin"}`)
+
+func newTestJti(t *testing.T) uuid.UUID {
+	t.Helper()
+	jti, err := uuid.NewV7()
+	if err != nil {
+		t.Fatalf("uuid.NewV7: %v", err)
+	}
+	return jti
+}
 
 // ========================================================
 // NewSessionManager
@@ -43,11 +54,10 @@ func TestNewSessionManager(t *testing.T) {
 func TestNewSecretJwt(t *testing.T) {
 	sm := newTestManager()
 	signer := &cipher.SignerDummy{}
+	jti := newTestJti(t)
+	now := time.Now()
 
-	j, err := sm.NewSecretJwt(signer, testPayload)
-	if err != nil {
-		t.Fatalf("NewSecretJwt returned error: %v", err)
-	}
+	j := sm.NewSecretJwt(signer, jti, now, testPayload)
 
 	if j.Header.Alg != signer.Alg() {
 		t.Fatalf("Alg = %q, want %q", j.Header.Alg, signer.Alg())
@@ -82,11 +92,10 @@ func TestNewSecretJwt(t *testing.T) {
 func TestNewAccessJwt(t *testing.T) {
 	sm := newTestManager()
 	signer := &cipher.SignerDummy{}
+	jti := newTestJti(t)
+	now := time.Now()
 
-	j, err := sm.NewAccessJwt(signer, testPayload)
-	if err != nil {
-		t.Fatalf("NewAccessJwt returned error: %v", err)
-	}
+	j := sm.NewAccessJwt(signer, jti, now, testPayload)
 
 	if j.Claims.Sub != "access" {
 		t.Fatalf("Sub = %q, want %q", j.Claims.Sub, "access")
@@ -106,15 +115,13 @@ func TestNewAccessJwt(t *testing.T) {
 func TestJtiUniqueness(t *testing.T) {
 	sm := newTestManager()
 	signer := &cipher.SignerDummy{}
+	now := time.Now()
 
-	j1, err := sm.NewSecretJwt(signer, testPayload)
-	if err != nil {
-		t.Fatalf("NewSecretJwt returned error: %v", err)
-	}
-	j2, err := sm.NewSecretJwt(signer, testPayload)
-	if err != nil {
-		t.Fatalf("NewSecretJwt returned error: %v", err)
-	}
+	jti1 := newTestJti(t)
+	jti2 := newTestJti(t)
+
+	j1 := sm.NewSecretJwt(signer, jti1, now, testPayload)
+	j2 := sm.NewSecretJwt(signer, jti2, now, testPayload)
 
 	if j1.Claims.Jti == j2.Claims.Jti {
 		t.Fatalf("two JWTs should have different Jti values, got %q", j1.Claims.Jti)
@@ -128,8 +135,10 @@ func TestJtiUniqueness(t *testing.T) {
 func TestSignedSecretToken_Roundtrip(t *testing.T) {
 	sm := newTestManager()
 	signer := &cipher.SignerDummy{}
+	jti := newTestJti(t)
+	now := time.Now()
 
-	token, err := sm.NewSignedSecretToken(signer, testPayload)
+	token, err := sm.NewSignedSecretToken(signer, jti, now, testPayload)
 	if err != nil {
 		t.Fatalf("NewSignedSecretToken returned error: %v", err)
 	}
@@ -157,11 +166,13 @@ func TestSignedSecretToken_Roundtrip(t *testing.T) {
 func TestSignedAccessToken_Roundtrip(t *testing.T) {
 	sm := newTestManager()
 	signer := &cipher.SignerDummy{}
+	jti := newTestJti(t)
+	now := time.Now()
 
 	accessPayload := json.RawMessage(`{"session_id":"s-1"}`)
 	publicPayload := json.RawMessage(`{"display_name":"Josh"}`)
 
-	token, err := sm.NewSignedAccessToken(signer, accessPayload, publicPayload)
+	token, err := sm.NewSignedAccessToken(signer, jti, now, accessPayload, publicPayload)
 	if err != nil {
 		t.Fatalf("NewSignedAccessToken returned error: %v", err)
 	}
@@ -245,8 +256,10 @@ func TestVerifySignedAccessToken_InsufficientSeparators(t *testing.T) {
 func TestEncryptedSecretToken_Roundtrip(t *testing.T) {
 	sm := newTestManager()
 	enc := &cipher.EncrypterDummy{}
+	jti := newTestJti(t)
+	now := time.Now()
 
-	token, err := sm.EncryptSecretToken(enc, testPayload)
+	token, err := sm.EncryptSecretToken(enc, jti, now, testPayload)
 	if err != nil {
 		t.Fatalf("EncryptSecretToken returned error: %v", err)
 	}
@@ -274,11 +287,13 @@ func TestEncryptedSecretToken_Roundtrip(t *testing.T) {
 func TestEncryptedAccessToken_Roundtrip(t *testing.T) {
 	sm := newTestManager()
 	enc := &cipher.EncrypterDummy{}
+	jti := newTestJti(t)
+	now := time.Now()
 
 	accessPayload := json.RawMessage(`{"session_id":"s-2"}`)
 	publicPayload := json.RawMessage(`{"display_name":"Alice"}`)
 
-	token, err := sm.EncryptAccessToken(enc, accessPayload, publicPayload)
+	token, err := sm.EncryptAccessToken(enc, jti, now, accessPayload, publicPayload)
 	if err != nil {
 		t.Fatalf("EncryptAccessToken returned error: %v", err)
 	}
@@ -374,13 +389,15 @@ func TestDecryptAccessToken_EmptyEncryptedPortion(t *testing.T) {
 func TestSignedAccessToken_PublicPayloadWithDots(t *testing.T) {
 	sm := newTestManager()
 	signer := &cipher.SignerDummy{}
+	jti := newTestJti(t)
+	now := time.Now()
 
 	// base64エンコード結果にドットは含まれないが、
 	// 末尾からのドット探索ロジックが正しいことを確認する
 	accessPayload := json.RawMessage(`{"id":"a"}`)
 	publicPayload := json.RawMessage(`{"url":"https://example.com/path","nested":{"key":"value"}}`)
 
-	token, err := sm.NewSignedAccessToken(signer, accessPayload, publicPayload)
+	token, err := sm.NewSignedAccessToken(signer, jti, now, accessPayload, publicPayload)
 	if err != nil {
 		t.Fatalf("NewSignedAccessToken returned error: %v", err)
 	}

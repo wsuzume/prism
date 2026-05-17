@@ -1,11 +1,15 @@
 package prism
 
 import (
+	"crypto/rand"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
+	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 
@@ -50,16 +54,12 @@ func buildProxy(targetStr string) (*httputil.ReverseProxy, error) {
 	return rp, nil
 }
 
-// buildTenantEngine は route → BackendConfig のマップから、
-// パスプレフィックスでルーティングする gin.Engine を構築して返す。
+// buildReverseProxyMap は route → BackendConfig のマップから、
+// route → ReverseProxy のマップを返す。
 // route キーは正規化済みで "" がデフォルトルート。
 // 現状は Targets の先頭要素のみ使用する（将来: ラウンドロビン）。
-func buildTenantEngine(routes map[string]*BackendConfig) (*gin.Engine, error) {
-	r := gin.New()
-	r.Use(gin.Recovery())
-
-	var defaultProxy *httputil.ReverseProxy
-
+func buildReverseProxyMap(routes map[string]*BackendConfig) (map[string]*httputil.ReverseProxy, error) {
+	proxies := map[string]*httputil.ReverseProxy{}
 	for route, cfg := range routes {
 		if len(cfg.Targets) == 0 {
 			continue
@@ -68,6 +68,20 @@ func buildTenantEngine(routes map[string]*BackendConfig) (*gin.Engine, error) {
 		if err != nil {
 			return nil, fmt.Errorf("route %q: %w", route, err)
 		}
+		proxies[route] = rp
+	}
+	return proxies, nil
+}
+
+// buildTenantEngine は route → ReverseProxy のマップから、
+// パスプレフィックスでルーティングする gin.Engine を構築して返す。
+func buildTenantEngine(proxies map[string]*httputil.ReverseProxy) *gin.Engine {
+	r := gin.New()
+	r.Use(gin.Recovery())
+
+	var defaultProxy *httputil.ReverseProxy
+
+	for route, rp := range proxies {
 		if route == "" {
 			defaultProxy = rp
 			continue
@@ -85,7 +99,7 @@ func buildTenantEngine(routes map[string]*BackendConfig) (*gin.Engine, error) {
 		})
 	}
 
-	return r, nil
+	return r
 }
 
 func RunReverseProxyServer(cfg *PrismConfig) {
@@ -94,14 +108,14 @@ func RunReverseProxyServer(cfg *PrismConfig) {
 		baseDomain = cfg.ProxyConfig.BaseDomain
 	}
 
-	// テナントごとの Engine を構築
-	tenantEngines := map[string]*gin.Engine{}
+	// テナントごとの ReverseProxy マップを構築
+	tenantProxies := map[string]map[string]*httputil.ReverseProxy{}
 	for tenant, routes := range cfg.Backends {
-		engine, err := buildTenantEngine(routes)
+		proxies, err := buildReverseProxyMap(routes)
 		if err != nil {
 			log.Fatalf("tenant %q: %v", tenant, err)
 		}
-		tenantEngines[tenant] = engine
+		tenantProxies[tenant] = proxies
 	}
 
 	r := gin.New()
@@ -112,16 +126,32 @@ func RunReverseProxyServer(cfg *PrismConfig) {
 		log.Printf("cookie config: domain=%q secure=%v", cfg.CookieConfig.Domain, cfg.CookieConfig.Secure)
 
 		sm := session.NewSessionManager("PRISM", "FLITLEAP")
-		// TODO: 鍵ファイルから読み込むようにする
-		dummyKey := []byte("0123456789abcdef0123456789abcdef") // 32 bytes = AES-256
-		e, err := cipher.NewEncrypterAESGCM(dummyKey)
+		if cfg.CookieConfig.CryptoKeyDir == "" {
+			log.Fatal("cookie_config.crypto_key_dir is required when cookie_config is set")
+		}
+		cryptoKey, err := loadOrCreateCookieKey(cfg.CookieConfig.CryptoKeyDir)
+		if err != nil {
+			log.Fatalf("failed to load or create cookie key: %v", err)
+		}
+		e, err := cipher.NewEncrypterAESGCM(cryptoKey)
 		if err != nil {
 			log.Fatal(err)
 		}
 		p := session.DefaultCookieSession(sm, e, cfg.CookieConfig.Domain, cfg.CookieConfig.Secure)
 
 		r.Use(p.Middleware())
-		// TODO: 対になる ModifyResponse をセットする
+
+		for _, proxies := range tenantProxies {
+			for _, rp := range proxies {
+				rp.ModifyResponse = p.ModifyResponse(rp.ModifyResponse)
+			}
+		}
+	}
+
+	// テナントごとの Engine を構築
+	tenantEngines := map[string]*gin.Engine{}
+	for tenant, proxies := range tenantProxies {
+		tenantEngines[tenant] = buildTenantEngine(proxies)
 	}
 
 	r.Use(tenantMiddleware(baseDomain))
@@ -153,4 +183,35 @@ func RunReverseProxyServer(cfg *PrismConfig) {
 	if err := r.Run(":" + port); err != nil {
 		log.Fatal(err)
 	}
+}
+
+const cookieKeyFile = "cookie_secret.key"
+const cookieKeySize = 32 // AES-256
+
+func loadOrCreateCookieKey(dir string) ([]byte, error) {
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return nil, fmt.Errorf("create crypto_key_dir: %w", err)
+	}
+	keyPath := filepath.Join(dir, cookieKeyFile)
+
+	data, err := os.ReadFile(keyPath)
+	if err == nil {
+		if len(data) != cookieKeySize {
+			return nil, fmt.Errorf("%s: expected %d bytes, got %d", keyPath, cookieKeySize, len(data))
+		}
+		return data, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("read cookie key: %w", err)
+	}
+
+	key := make([]byte, cookieKeySize)
+	if _, err := rand.Read(key); err != nil {
+		return nil, fmt.Errorf("generate cookie key: %w", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		return nil, fmt.Errorf("write cookie key: %w", err)
+	}
+	log.Printf("generated new cookie key: %s", keyPath)
+	return key, nil
 }

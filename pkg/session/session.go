@@ -560,8 +560,6 @@ func (s *CookieSession) Middleware() gin.HandlerFunc {
 
 func (s *CookieSession) ModifyResponse(orig func(*http.Response) error) func(*http.Response) error {
 	return func(resp *http.Response) error {
-		// TODO: ログアウト機能の実装
-
 		if orig != nil {
 			if err := orig(resp); err != nil {
 				return err

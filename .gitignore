@@ -34,3 +34,7 @@ go.work.sum
 # Development directories
 bin
 certs
+.secret
+
+# Development files
+prism.yml
