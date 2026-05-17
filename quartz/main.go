@@ -86,7 +86,21 @@ func handlePostLogin(c *gin.Context) {
 }
 
 func handleLogout(c *gin.Context) {
-	c.SetCookie("PRISM-ACCESS-TOKEN", "", -1, "/", "", false, true)
+	payload := struct {
+		Authorized    bool   `json:"authorized"`
+		Authenticated bool   `json:"authenticated"`
+		AgentVerified bool   `json:"agent_verified"`
+		AgentType     string `json:"agent_type"`
+		SessionID     string `json:"session_id"`
+		UserID        string `json:"user_id"`
+		UserName      string `json:"user_name"`
+	}{}
+	payloadJson, err := json.Marshal(payload)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	c.Header("PRISM-SECRET-HEADER", string(payloadJson))
 	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
 }
 
@@ -95,7 +109,7 @@ func main() {
 
 	r.GET("/login", handleGetLogin)
 	r.POST("/login", handlePostLogin)
-	r.Any("/logout", handleLogout)
+	r.POST("/logout", handleLogout)
 
 	r.NoRoute(func(c *gin.Context) {
 		body, _ := io.ReadAll(c.Request.Body)
