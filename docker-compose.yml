@@ -3,7 +3,8 @@ services:
     image: prism:latest
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: prism/Dockerfile
+      target: runner
     container_name: prism
     networks:
       prism-network:
@@ -12,9 +13,11 @@ services:
       - "8080:8080"
       # - "443:443"
     volumes:
-      # - ./.prism/hello.yml:/app/config.yml:ro
-      - ./.prism/simple.yml:/app/config.yml:ro
-      # - ./.prism/example.yml:/app/config.yml:ro
+      - ./.secret:/secret
+      - ./prism.yml:/app/prism.yml:ro
+      # - ./.prism/hello.yml:/app/prism.yml:ro
+      # - ./.prism/simple.yml:/app/prism.yml:ro
+      # - ./.prism/subdomain.yml:/app/prism.yml:ro
 
   backend1:
     image: nginx:alpine
@@ -23,9 +26,12 @@ services:
       prism-network:
         ipv4_address: 172.18.0.20
 
-  backend2:
-    image: joshnobus/echo:latest
-    container_name: backend2
+  quartz:
+    image: quartz:latest
+    build:
+      context: .
+      dockerfile: quartz/Dockerfile
+    container_name: quartz
     networks:
       prism-network:
         ipv4_address: 172.18.0.30

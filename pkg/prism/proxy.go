@@ -1,12 +1,15 @@
 package prism
 
 import (
+	"crypto/rand"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 
@@ -123,12 +126,12 @@ func RunReverseProxyServer(cfg *PrismConfig) {
 		log.Printf("cookie config: domain=%q secure=%v", cfg.CookieConfig.Domain, cfg.CookieConfig.Secure)
 
 		sm := session.NewSessionManager("PRISM", "FLITLEAP")
-		if cfg.CookieConfig.CryptoKeyPath == "" {
-			log.Fatal("cookie_config.crypto_key_path is required when cookie_config is set")
+		if cfg.CookieConfig.CryptoKeyDir == "" {
+			log.Fatal("cookie_config.crypto_key_dir is required when cookie_config is set")
 		}
-		cryptoKey, err := os.ReadFile(cfg.CookieConfig.CryptoKeyPath)
+		cryptoKey, err := loadOrCreateCookieKey(cfg.CookieConfig.CryptoKeyDir)
 		if err != nil {
-			log.Fatalf("failed to read crypto key: %v", err)
+			log.Fatalf("failed to load or create cookie key: %v", err)
 		}
 		e, err := cipher.NewEncrypterAESGCM(cryptoKey)
 		if err != nil {
@@ -180,4 +183,35 @@ func RunReverseProxyServer(cfg *PrismConfig) {
 	if err := r.Run(":" + port); err != nil {
 		log.Fatal(err)
 	}
+}
+
+const cookieKeyFile = "cookie_secret.key"
+const cookieKeySize = 32 // AES-256
+
+func loadOrCreateCookieKey(dir string) ([]byte, error) {
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return nil, fmt.Errorf("create crypto_key_dir: %w", err)
+	}
+	keyPath := filepath.Join(dir, cookieKeyFile)
+
+	data, err := os.ReadFile(keyPath)
+	if err == nil {
+		if len(data) != cookieKeySize {
+			return nil, fmt.Errorf("%s: expected %d bytes, got %d", keyPath, cookieKeySize, len(data))
+		}
+		return data, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("read cookie key: %w", err)
+	}
+
+	key := make([]byte, cookieKeySize)
+	if _, err := rand.Read(key); err != nil {
+		return nil, fmt.Errorf("generate cookie key: %w", err)
+	}
+	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		return nil, fmt.Errorf("write cookie key: %w", err)
+	}
+	log.Printf("generated new cookie key: %s", keyPath)
+	return key, nil
 }

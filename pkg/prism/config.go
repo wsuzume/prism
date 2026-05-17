@@ -53,7 +53,7 @@ func (p *ProxyConfig) NormalizeRoute(route string) string {
 type CookieConfig struct {
 	Domain        string `yaml:"domain,omitempty"`
 	Secure        bool   `yaml:"secure,omitempty"`
-	CryptoKeyPath string `yaml:"crypto_key_path,omitempty"`
+	CryptoKeyDir  string `yaml:"crypto_key_dir,omitempty"`
 }
 
 func (c *CookieConfig) IsValid() bool {
@@ -183,8 +183,8 @@ func GetConfigPriorityList() []string {
 }
 
 var configPriorityList = []string{
-	"./config.yml",
-	"./config.yaml",
+	"./prism.yml",
+	"./prism.yaml",
 	"./.prism/config.yml",
 	"~/.prism/config.yaml",
 	"~/.config/prism/config.yml",
